@@ -1,0 +1,499 @@
+{
+  "config": {
+    "initiate_flow": {
+      "user": "Ajouter un véhicule"
+    },
+    "step": {
+      "user": {
+        "title": "Suivi des pneumatiques",
+        "description": "Une entrée par véhicule. Les trains de pneus s'ajoutent ensuite depuis « Configurer », autant que nécessaire.",
+        "data": {
+          "vehicle": "Véhicule",
+          "odometer_entity": "Entité odomètre",
+          "initial_odometer": "Relevé actuel du compteur"
+        },
+        "data_description": {
+          "vehicle": "Nomme l'appareil et ses entités, par exemple « Alfa GT ».",
+          "odometer_entity": "Laisser vide si le compteur se saisit à la main : un champ apparaîtra alors sur la carte.",
+          "initial_odometer": "Où en est le compteur aujourd'hui. Pose le point de départ : un train monté avant que le compteur soit connu compte à partir de zéro."
+        }
+      }
+    },
+    "error": {
+      "vehicle_required": "Donnez un nom au véhicule."
+    },
+    "abort": {
+      "already_configured": "Ce véhicule est déjà suivi."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Suivi des pneus",
+        "description": "Que voulez-vous faire ?",
+        "menu_options": {
+          "vehicle": "Nom du véhicule",
+          "odometer": "Source du compteur",
+          "add": "Ajouter un train de pneus",
+          "manage": "Modifier un train de pneus"
+        }
+      },
+      "vehicle": {
+        "title": "Nom du véhicule",
+        "description": "Nomme l'appareil, et à travers lui chaque entité — « Alfa GT Odomètre ». Le titre de l'entrée suit.",
+        "data": {
+          "vehicle": "Véhicule",
+          "rotation_interval": "Permuter tous les"
+        },
+        "data_description": {
+          "rotation_interval": "Kilomètres entre deux permutations, pour le rappel sur un train de 4 monté. Zéro n'en dit rien."
+        }
+      },
+      "odometer": {
+        "title": "Source du compteur",
+        "description": "D'où vient le kilométrage du véhicule.",
+        "data": {
+          "odometer_entity": "Entité odomètre"
+        },
+        "data_description": {
+          "odometer_entity": "Relier le compteur de la voiture évite de le saisir à chaque permutation. Laissé vide, un champ apparaît sur la carte."
+        }
+      },
+      "add": {
+        "title": "Nouveau train",
+        "description": "Le kilométrage est attaché au train, pas à sa référence : corriger la référence plus tard ne perd rien.",
+        "data": {
+          "reference": "Référence",
+          "season": "Type",
+          "size": "Dimension",
+          "pressure_front": "Pression de consigne à l'avant",
+          "pressure_rear": "Pression de consigne à l'arrière",
+          "dot": "Code DOT",
+          "label": "Libellé",
+          "axle": "Nombre de pneus",
+          "initial_total": "Distance déjà parcourue",
+          "price": "Prix payé",
+          "storage": "Rangé à"
+        },
+        "data_description": {
+          "reference": "Marque et modèle, par exemple « Michelin CrossClimate 2 ».",
+          "size": "Facultatif, par exemple « 225/45 R17 ».",
+          "pressure_front": "Facultatif : le chiffre de l'étiquette de portière pour l'essieu avant, à froid, en bar. Rempli, n'importe quel capteur de pression devient une alarme : 15 % en dessous ou 30 % au-dessus, le coin est signalé.",
+          "pressure_rear": "Facultatif : le chiffre de l'essieu arrière. Une paire est jugée selon l'essieu où elle est montée.",
+          "dot": "Facultatif : les quatre chiffres de semaine et d'année sur le flanc, par exemple « 3223 » pour la semaine 32 de 2023. La ligne DOT entière peut être collée telle quelle.",
+          "axle": "Une paire se monte à l'avant ou à l'arrière, et peut passer de l'une à l'autre.",
+          "label": "Facultatif : remplace la référence à l'écran.",
+          "initial_total": "Pour reprendre un suivi existant. Modifiable ensuite par « Corriger un total ».",
+          "price": "Facultatif, pour le train entier. Divisé par ce qu'il parcourt, il dit quelle référence revenait le moins cher.",
+          "storage": "Facultatif : où le train attend quand il n'est pas sur la voiture — « garage, étagère gauche », « chez le garagiste »."
+        }
+      },
+      "manage": {
+        "title": "Quel train ?",
+        "description": "Chaque ligne dit ce que le train a parcouru, et où il en est.",
+        "data": {
+          "id": "Train de pneus"
+        }
+      },
+      "actions": {
+        "title": "Que faire de ce train ?",
+        "description": "{set}",
+        "menu_options": {
+          "mount": "Monter sur la voiture",
+          "edit": "Modifier la fiche",
+          "tpms": "Capteurs de pression",
+          "adjust": "Corriger le cumul",
+          "rotate": "Permuter",
+          "separate": "Séparer en deux paires",
+          "duplicate": "Dupliquer la fiche",
+          "retire": "Passer à l'historique",
+          "restore": "Remettre en service",
+          "delete": "Supprimer le train"
+        }
+      },
+      "mount": {
+        "title": "Monter sur la voiture",
+        "description": "{set}\n\nUne voiture porte un train de 4, **ou** deux paires — jamais un mélange :\n\n- un train de 4 prend les deux essieux ;\n- monter une paire dépose entièrement le train de 4 qui s'y trouvait — la moitié d'un train de 4 n'est pas un train de 4.\n\nSur la voiture aujourd'hui — {fitted}.",
+        "data": {
+          "position": "Essieu",
+          "odometer": "Relevé du compteur"
+        },
+        "data_description": {
+          "position": "Où poser la paire. Elle quitte l'autre essieu si elle y était : deux pneus qui changent de bout restent deux pneus.",
+          "odometer": "Relevé au moment du montage. Il arrête le compte du train déposé — c'est le dernier moment pour dire où en était le compteur. Omis, le dernier relevé connu est utilisé."
+        }
+      },
+      "edit": {
+        "title": "Modifier la fiche",
+        "description": "{set}\n\nLes kilomètres parcourus sont conservés : ils ne dépendent pas de ce que vous changez ici.",
+        "data": {
+          "reference": "Référence",
+          "season": "Type",
+          "size": "Dimension",
+          "pressure_front": "Pression de consigne à l'avant",
+          "pressure_rear": "Pression de consigne à l'arrière",
+          "dot": "Code DOT",
+          "label": "Libellé",
+          "axle": "Nombre de pneus",
+          "price": "Prix payé",
+          "storage": "Rangé à"
+        },
+        "data_description": {
+          "reference": "Marque et modèle, par exemple « Michelin CrossClimate 2 ».",
+          "size": "Facultatif, par exemple « 225/45 R17 ».",
+          "pressure_front": "Facultatif : le chiffre de l'étiquette de portière pour l'essieu avant, à froid, en bar. Rempli, n'importe quel capteur de pression devient une alarme : 15 % en dessous ou 30 % au-dessus, le coin est signalé.",
+          "pressure_rear": "Facultatif : le chiffre de l'essieu arrière. Une paire est jugée selon l'essieu où elle est montée.",
+          "dot": "Facultatif : les quatre chiffres de semaine et d'année sur le flanc, par exemple « 3223 » pour la semaine 32 de 2023. La ligne DOT entière peut être collée telle quelle.",
+          "axle": "Une paire se monte à l'avant ou à l'arrière, et peut passer de l'une à l'autre.",
+          "label": "Facultatif : remplace la référence à l'écran.",
+          "price": "Facultatif, pour le train entier. Divisé par ce qu'il parcourt, il dit quelle référence revenait le moins cher.",
+          "storage": "Facultatif : où le train attend quand il n'est pas sur la voiture — « garage, étagère gauche », « chez le garagiste »."
+        }
+      },
+      "duplicate": {
+        "title": "Dupliquer la fiche",
+        "description": "{set}\n\nUn nouveau train reprend cette fiche, avec un compteur à lui. Rien n'est pris à l'original.",
+        "data": {
+          "reference": "Référence",
+          "season": "Type",
+          "size": "Dimension",
+          "pressure_front": "Pression de consigne à l'avant",
+          "pressure_rear": "Pression de consigne à l'arrière",
+          "dot": "Code DOT",
+          "label": "Libellé",
+          "axle": "Nombre de pneus",
+          "initial_total": "Distance déjà parcourue",
+          "price": "Prix payé",
+          "storage": "Rangé à",
+          "replace": "Remplacer le train monté",
+          "odometer": "Relevé du compteur"
+        },
+        "data_description": {
+          "reference": "Marque et modèle, par exemple « Michelin CrossClimate 2 ».",
+          "size": "Facultatif, par exemple « 225/45 R17 ».",
+          "pressure_front": "Facultatif : le chiffre de l'étiquette de portière pour l'essieu avant, à froid, en bar. Rempli, n'importe quel capteur de pression devient une alarme : 15 % en dessous ou 30 % au-dessus, le coin est signalé.",
+          "pressure_rear": "Facultatif : le chiffre de l'essieu arrière. Une paire est jugée selon l'essieu où elle est montée.",
+          "dot": "Facultatif : les quatre chiffres de semaine et d'année sur le flanc, par exemple « 3223 » pour la semaine 32 de 2023. La ligne DOT entière peut être collée telle quelle.",
+          "axle": "Une paire se monte à l'avant ou à l'arrière, et peut passer de l'une à l'autre.",
+          "label": "À remplir ici : deux trains portant la même référence se ressemblent dans une liste.",
+          "initial_total": "Laissé à zéro : une copie représente des pneus sortis de leur emballage, ce qui est précisément ce qui la rend comparable au train dont elle est tirée.",
+          "price": "Facultatif, pour le train entier. Divisé par ce qu'il parcourt, il dit quelle référence revenait le moins cher.",
+          "storage": "Facultatif : où le train attend quand il n'est pas sur la voiture — « garage, étagère gauche », « chez le garagiste ».",
+          "replace": "« {title} » est déposé au relevé du jour et passe à l'historique, la copie prend sa place à zéro.",
+          "odometer": "Relevé au moment du changement. Omis, le dernier connu est utilisé."
+        }
+      },
+      "retire": {
+        "title": "Passer à l'historique",
+        "description": "{set}\n\nCe total est figé, et le train rangé dans l'historique : il ne peut plus être monté.\n\nRien n'est supprimé — vous pouvez le remettre en service, ou supprimer le train si vous ne tenez pas à son passé.",
+        "data": {
+          "odometer": "Relevé du compteur"
+        },
+        "data_description": {
+          "odometer": "Ce train est monté : les derniers kilomètres lui reviennent. C'est le dernier moment pour dire combien."
+        }
+      },
+      "restore": {
+        "title": "Remettre en service",
+        "description": "{set}\n\nLe train redevient montable, et son compteur repart de là."
+      },
+      "delete": {
+        "title": "Supprimer le train",
+        "description": "{set}\n\nLe train quitte la liste, avec son capteur et son appareil.\n\nLe kilométrage, lui, est conservé : rajouter le train plus tard le retrouve."
+      },
+      "resync": {
+        "title": "Deux relevés se contredisent",
+        "description": "**{entity}** indique **{reading} km**, et le suivi en est à **{tracked} km**.\n\nUn compteur ne recule pas : ce relevé est refusé tel quel, et le suivi resterait bloqué à {tracked} km pour de bon.\n\nReprendre la valeur du capteur solde le train monté à {tracked} km — ces kilomètres restent les siens — et repart de {reading} km.",
+        "data": {
+          "resync": "Reprendre la valeur du capteur"
+        },
+        "data_description": {
+          "resync": "Les kilomètres déjà parcourus sont d'abord soldés à {tracked} km, et le compte reprend depuis le capteur."
+        }
+      },
+      "adjust": {
+        "title": "Corriger le cumul",
+        "description": "{set}\n\nCe que vous écrivez ici devient son cumul, et le compte repart de là. Rien d'autre ne bouge.",
+        "data": {
+          "total": "Cumul"
+        },
+        "data_description": {
+          "total": "Kilomètres à retenir pour ce train. Le compte repart de là."
+        }
+      },
+      "tpms": {
+        "title": "Capteurs de pression",
+        "description": "{set}\n\nUn capteur par pneu — {slots}.\n\nLe capteur est vissé sur la roue : il appartient donc au train et le suit d'une voiture à l'autre. Température et pile sont lues sur le même appareil, inutile de les désigner. Vider un champ détache le capteur.",
+        "data": {
+          "front_left": "Avant gauche",
+          "front_right": "Avant droit",
+          "rear_left": "Arrière gauche",
+          "rear_right": "Arrière droit",
+          "left": "Gauche",
+          "right": "Droite"
+        }
+      },
+      "rotate": {
+        "title": "Permuter",
+        "description": "{set}\n\n**{since} km** depuis la dernière permutation.\n\nChaque roue passe à l'autre bout de son côté. Le kilométrage ne change pas — le train a parcouru ce qu'il a parcouru — mais le rappel repart d'ici, et les capteurs de pression suivent leur roue.",
+        "data": {
+          "odometer": "Relevé du compteur"
+        },
+        "data_description": {
+          "odometer": "Relevé au moment du changement. Omis, le dernier connu est utilisé."
+        }
+      },
+      "separate": {
+        "title": "Séparer en deux paires",
+        "description": "{set}\n\nIl devient deux trains de deux, chacun partant de ce même total : ces kilomètres ont été parcourus sur les quatre pneus, et ils appartiennent aux deux moitiés. À partir d'ici, chaque paire compte pour elle-même.\n\nRien n'est démonté, et rien n'est supprimé.",
+        "data": {
+          "pair": "Paire qui devient un nouveau train",
+          "label": "Nom du nouveau train",
+          "odometer": "Relevé du compteur"
+        },
+        "data_description": {
+          "pair": "L'autre reste sur cette fiche et garde son historique. Les deux paires partent du même total dans tous les cas — ceci décide seulement quels capteurs suivent laquelle.",
+          "label": "À remplir : les deux moitiés partagent la même référence et se ressemblent dans une liste.",
+          "odometer": "Relevé au moment du changement. Omis, le dernier connu est utilisé."
+        }
+      }
+    },
+    "error": {
+      "vehicle_required": "Donnez un nom au véhicule.",
+      "dot_invalid": "Un code DOT se lit deux chiffres de semaine, puis deux d'année — par exemple « 3223 ».",
+      "axle_conflict": "Ce train est monté et l'autre essieu porte déjà autre chose : le passer à 4 roues en déclarerait six sur la voiture. Déposez d'abord l'autre train.",
+      "replace_axle": "Remplacer met la copie exactement là où se trouve l'original : elle doit couvrir les mêmes roues. Pour changer le nombre de roues, ajoutez la copie sans remplacer, puis montez-la séparément.",
+      "vehicle_exists": "Un autre véhicule porte déjà ce nom."
+    },
+    "abort": {
+      "not_loaded": "Le véhicule n'est pas chargé pour le moment — corrigez ce que signale sa notification, puis revenez ici.",
+      "renamed": "Véhicule renommé.",
+      "fitted": "Train monté.",
+      "not_mountable": "Un train à l'historique ne peut pas être monté.",
+      "retired": "Train passé à l'historique. Son kilométrage est conservé.",
+      "restored": "Train remis en service.",
+      "unknown_set": "Ce train n'existe plus.",
+      "adjusted": "Cumul corrigé.",
+      "rotated": "Permutation enregistrée.",
+      "not_separable": "Seul un train de quatre en service peut être séparé.",
+      "not_rotatable": "Seul un train de quatre monté sur la voiture peut être permuté."
+    }
+  },
+  "selector": {
+    "season": {
+      "options": {
+        "summer": "Été",
+        "winter": "Hiver",
+        "all_season": "4 saisons"
+      }
+    },
+    "axle": {
+      "options": {
+        "all": "4 roues",
+        "pair": "2 roues (une paire)"
+      }
+    },
+    "position": {
+      "options": {
+        "front": "Avant",
+        "rear": "Arrière"
+      }
+    },
+    "pair": {
+      "options": {
+        "front": "Avant (AVG + AVD)",
+        "rear": "Arrière (ARG + ARD)"
+      }
+    }
+  },
+  "entity": {
+    "select": {
+      "mounted_front": {
+        "name": "Train avant"
+      },
+      "mounted_rear": {
+        "name": "Train arrière"
+      }
+    },
+    "number": {
+      "odometer": {
+        "name": "Odomètre"
+      },
+      "total": {
+        "name": "Cumul"
+      }
+    },
+    "sensor": {
+      "current": {
+        "name": "Pneumatiques"
+      },
+      "mileage": {
+        "name": "Kilométrage"
+      }
+    }
+  },
+  "services": {
+    "mount": {
+      "name": "Monter un train",
+      "description": "Permute : arrête le compte du train sortant et pose le point de départ de l'entrant. Équivaut à choisir le train dans le select.",
+      "fields": {
+        "tyre_set": {
+          "name": "Train",
+          "description": "Nom du train de pneus à monter."
+        },
+        "position": {
+          "name": "Position",
+          "description": "Où monter le jeu. Sans effet sur un jeu de 4 roues, qui prend les deux. Omis pour une paire, elle va à l'avant."
+        },
+        "odometer": {
+          "name": "Odomètre",
+          "description": "Relevé du compteur au moment de la permutation. Omis, le dernier relevé connu est utilisé."
+        }
+      }
+    },
+    "set_odometer": {
+      "name": "Relever l'odomètre",
+      "description": "Note le compteur du véhicule, sans permuter.",
+      "fields": {
+        "odometer": {
+          "name": "Odomètre",
+          "description": "Relevé du compteur."
+        }
+      }
+    },
+    "adjust": {
+      "name": "Corriger un cumul",
+      "description": "Fixe le kilométrage total d'un train. Sert à la reprise d'un suivi existant ou à réparer une permutation mal saisie.",
+      "fields": {
+        "tyre_set": {
+          "name": "Train",
+          "description": "Nom du train de pneus."
+        },
+        "total": {
+          "name": "Total",
+          "description": "Kilométrage total à retenir pour ce train."
+        }
+      }
+    },
+    "retire": {
+      "name": "Passer à l'historique",
+      "description": "Fige le kilométrage d'un train et l'empêche d'être monté. Le train reste consultable, rangé dans l'historique.",
+      "fields": {
+        "tyre_set": {
+          "name": "Train",
+          "description": "Nom du train de pneus."
+        },
+        "odometer": {
+          "name": "Odomètre",
+          "description": "Relevé au moment du retrait. Utile si le train est monté : les derniers kilomètres lui reviennent."
+        }
+      }
+    },
+    "restore": {
+      "name": "Remettre en service",
+      "description": "Rend montable un train passé à l'historique.",
+      "fields": {
+        "tyre_set": {
+          "name": "Train",
+          "description": "Nom du train de pneus."
+        }
+      }
+    },
+    "unmount": {
+      "name": "Déposer",
+      "description": "Retire les pneus d'une position sans en monter d'autres. Le kilométrage du jeu déposé est arrêté.",
+      "fields": {
+        "position": {
+          "name": "Position",
+          "description": "Omise, les deux essieux sont libérés."
+        },
+        "odometer": {
+          "name": "Odomètre",
+          "description": "Relevé au moment de la dépose."
+        }
+      }
+    },
+    "rotate": {
+      "name": "Permuter",
+      "description": "Enregistre une permutation sur un train de 4 monté : chaque roue passe à l'autre bout de son côté. Le kilométrage est inchangé, le rappel repart, et les capteurs de pression suivent leur roue.",
+      "fields": {
+        "tyre_set": {
+          "name": "Train",
+          "description": "Nom du train de pneus."
+        },
+        "odometer": {
+          "name": "Odomètre",
+          "description": "Relevé au moment de la permutation."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "unknown_set": {
+      "message": "« {set} » n'est pas un train connu de {vehicle}."
+    },
+    "set_retired": {
+      "message": "« {set} » est à l'historique et ne peut plus être monté. Remettez-le en service d'abord."
+    },
+    "not_mounted": {
+      "message": "« {set} » n'est pas sur la voiture : il n'y a rien à permuter."
+    },
+    "pair_not_rotatable": {
+      "message": "« {set} » est une paire. Montez-la sur l'autre essieu plutôt que de la permuter : deux pneus changent de bout en étant déplacés, ce qui est un montage."
+    },
+    "odometer_backwards": {
+      "message": "Un compteur ne recule pas : {value} km est en deçà des {tracked} km déjà relevés. Changez de source si le compteur a réellement changé."
+    }
+  },
+  "words": {
+    "_comment": "Les mots que le composant assemble lui-même. La mécanique de Home Assistant ne les atteint pas — un modèle d'appareil, un état construit sur deux noms, la ligne qui ouvre un pas de flux — alors le composant lit cette section dans son propre fichier de traduction et fait l'assemblage.",
+    "axle": {
+      "all": "4 roues",
+      "pair": "2 roues"
+    },
+    "position": {
+      "front": "avant",
+      "rear": "arrière"
+    },
+    "position_short": {
+      "front": "AV",
+      "rear": "AR"
+    },
+    "corner": {
+      "front_left": "AVG",
+      "front_right": "AVD",
+      "rear_left": "ARG",
+      "rear_right": "ARD"
+    },
+    "side": {
+      "left": "gauche",
+      "right": "droite"
+    },
+    "season": {
+      "summer": "été",
+      "winter": "hiver",
+      "all_season": "4 saisons"
+    },
+    "device": {
+      "vehicle": "Véhicule",
+      "tyre_set": "Train de pneus"
+    },
+    "set": {
+      "fallback": "Train"
+    },
+    "status": {
+      "mounted": "monté",
+      "mounted_at": "monté à l'{position}",
+      "removed": "déposé",
+      "retired": "à l'historique",
+      "history": "historique"
+    },
+    "entry_title": {
+      "template": "Suivi {article}{vehicle}",
+      "empty": "Suivi",
+      "article": "de ",
+      "article_elided": "d’",
+      "elides_before": "aeiouâàäéèêëîïôöùûü"
+    }
+  }
+}

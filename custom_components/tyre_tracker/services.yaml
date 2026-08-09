@@ -1,0 +1,155 @@
+# Structure only. Every name and description lives in `strings.json` and its
+# translations: written twice, the two would drift apart, and the French would
+# leak into an English interface.
+
+mount:
+  target:
+    entity:
+      integration: tyre_tracker
+      domain: sensor
+  fields:
+    tyre_set:
+      required: true
+      example: Hiver
+      selector:
+        text:
+    position:
+      required: false
+      example: rear
+      selector:
+        select:
+          translation_key: position
+          options:
+            - front
+            - rear
+    odometer:
+      required: false
+      example: 151500
+      selector:
+        number:
+          min: 0
+          max: 2000000
+          step: 1
+          mode: box
+          unit_of_measurement: km
+
+set_odometer:
+  target:
+    entity:
+      integration: tyre_tracker
+      domain: sensor
+  fields:
+    odometer:
+      required: true
+      example: 151500
+      selector:
+        number:
+          min: 0
+          max: 2000000
+          step: 1
+          mode: box
+          unit_of_measurement: km
+
+adjust:
+  target:
+    entity:
+      integration: tyre_tracker
+      domain: sensor
+  fields:
+    tyre_set:
+      required: true
+      example: Été
+      selector:
+        text:
+    total:
+      required: true
+      example: 26500
+      selector:
+        number:
+          min: 0
+          max: 2000000
+          step: 1
+          mode: box
+          unit_of_measurement: km
+
+rotate:
+  target:
+    entity:
+      integration: tyre_tracker
+      domain: sensor
+  fields:
+    tyre_set:
+      required: true
+      example: Michelin CrossClimate 2
+      selector:
+        text:
+    odometer:
+      required: false
+      example: 151500
+      selector:
+        number:
+          min: 0
+          max: 2000000
+          step: 1
+          mode: box
+          unit_of_measurement: km
+
+retire:
+  target:
+    entity:
+      integration: tyre_tracker
+      domain: sensor
+  fields:
+    tyre_set:
+      required: true
+      example: Michelin Alpin 5
+      selector:
+        text:
+    odometer:
+      required: false
+      example: 151500
+      selector:
+        number:
+          min: 0
+          max: 2000000
+          step: 1
+          mode: box
+          unit_of_measurement: km
+
+restore:
+  target:
+    entity:
+      integration: tyre_tracker
+      domain: sensor
+  fields:
+    tyre_set:
+      required: true
+      example: Michelin Alpin 5
+      selector:
+        text:
+
+unmount:
+  target:
+    entity:
+      integration: tyre_tracker
+      domain: sensor
+  fields:
+    position:
+      required: false
+      example: front
+      selector:
+        select:
+          translation_key: position
+          options:
+            - front
+            - rear
+    odometer:
+      required: false
+      example: 151500
+      selector:
+        number:
+          min: 0
+          max: 2000000
+          step: 1
+          mode: box
+          unit_of_measurement: km

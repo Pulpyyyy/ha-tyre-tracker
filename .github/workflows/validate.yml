@@ -1,0 +1,40 @@
+name: Validate
+
+on:
+  push:
+  pull_request:
+  schedule:
+    - cron: "0 4 * * *"
+  workflow_dispatch:
+
+jobs:
+  hacs:
+    name: HACS validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hacs/action@main
+        with:
+          category: integration
+
+  hassfest:
+    name: Hassfest validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: home-assistant/actions/hassfest@master
+
+  translations-sync:
+    name: strings.json in sync with translations/en.json
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 - <<'EOF'
+          import json, sys
+          base = "custom_components/tyre_tracker/"
+          strings = json.load(open(base + "strings.json", encoding="utf-8"))
+          en = json.load(open(base + "translations/en.json", encoding="utf-8"))
+          if strings != en:
+              sys.exit("strings.json and translations/en.json differ — copy the edited one over the other.")
+          EOF

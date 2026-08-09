@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>tyres-card harness</title>
+<style>
+  :root {
+    --primary-color: #03a9f4;
+    --accent-color: #ff9800;
+    --error-color: #db4437;
+    --warning-color: #ffa726;
+    --success-color: #43a047;
+    --info-color: #039be5;
+    --ha-card-border-radius: 12px;
+    --mdc-icon-size: 24px;
+  }
+  body[data-theme="light"] {
+    --card-background-color: #ffffff;
+    --ha-card-background: #ffffff;
+    --primary-background-color: #f4f5f7;
+    --primary-text-color: #212121;
+    --secondary-text-color: #6f6f6f;
+    --secondary-background-color: #f0f2f4;
+    --divider-color: rgba(0, 0, 0, .12);
+    --ha-card-border-color: #e6e8ea;
+    --ha-card-box-shadow: 0 2px 10px rgba(0, 0, 0, .08);
+    --disabled-text-color: #bdbdbd;
+  }
+  body[data-theme="dark"] {
+    --card-background-color: #1d1e21;
+    --ha-card-background: #1d1e21;
+    --primary-background-color: #101114;
+    --primary-text-color: #e4e4e6;
+    --secondary-text-color: #9d9fa4;
+    --secondary-background-color: #2a2c30;
+    --divider-color: rgba(255, 255, 255, .12);
+    --ha-card-border-color: #2a2c30;
+    --ha-card-box-shadow: 0 2px 10px rgba(0, 0, 0, .4);
+    --disabled-text-color: #6f6f6f;
+  }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--primary-background-color);
+    color: var(--primary-text-color);
+    font-family: Roboto, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  #stage { padding: 28px; width: 430px; }
+  body.badge-view {
+    background:
+      repeating-linear-gradient(0deg, rgba(0,0,0,.045) 0 1px, transparent 1px 46px),
+      repeating-linear-gradient(90deg, rgba(0,0,0,.045) 0 1px, transparent 1px 46px),
+      #dfe3e6;
+  }
+  body.badge-view #stage {
+    width: auto;
+    padding: 56px 72px;
+    display: inline-block;
+  }
+</style>
+</head>
+<body data-theme="light">
+<div id="stage"></div>
+<script>
+  // ---- minimal Home Assistant element stubs -------------------------------
+  // ha-icon: fetches the MDI glyph from jsdelivr and inlines it, coloured by
+  // currentColor exactly like the real element.
+  const MDI_CACHE = {};
+  class HaIcon extends HTMLElement {
+    static get observedAttributes() { return ["icon"]; }
+    connectedCallback() { this.#render(); }
+    attributeChangedCallback() { this.#render(); }
+    set icon(value) { this.setAttribute("icon", value); }
+    get icon() { return this.getAttribute("icon"); }
+    async #render() {
+      if (!this.shadowRoot) {
+        this.attachShadow({ mode: "open" });
+        this.shadowRoot.innerHTML =
+          "<style>:host{display:inline-flex;align-items:center;justify-content:center;" +
+          "width:var(--mdc-icon-size,24px);height:var(--mdc-icon-size,24px);flex-shrink:0}" +
+          "svg{width:100%;height:100%;fill:currentColor;display:block}</style><span></span>";
+      }
+      const name = (this.getAttribute("icon") || "").replace(/^mdi:/, "");
+      if (!name) return;
+      try {
+        MDI_CACHE[name] ??= fetch(
+          "https://cdn.jsdelivr.net/npm/@mdi/svg@7.4.47/svg/" + name + ".svg"
+        ).then((r) => (r.ok ? r.text() : ""));
+        const svg = await MDI_CACHE[name];
+        if ((this.getAttribute("icon") || "").replace(/^mdi:/, "") === name) {
+          this.shadowRoot.querySelector("span").innerHTML = svg;
+        }
+      } catch (e) { /* icon stays empty */ }
+    }
+  }
+  customElements.define("ha-icon", HaIcon);
+
+  class HaCard extends HTMLElement {
+    connectedCallback() {
+      if (this.shadowRoot) return;
+      this.attachShadow({ mode: "open" });
+      this.shadowRoot.innerHTML =
+        "<style>:host{display:block;background:var(--ha-card-background,var(--card-background-color,#fff));" +
+        "border-radius:var(--ha-card-border-radius,12px);border:1px solid var(--ha-card-border-color,transparent);" +
+        "box-shadow:var(--ha-card-box-shadow,none);color:var(--primary-text-color);overflow:hidden}</style><slot></slot>";
+    }
+  }
+  customElements.define("ha-card", HaCard);
+
+  class HaAlert extends HTMLElement {
+    connectedCallback() {
+      if (this.shadowRoot) return;
+      this.attachShadow({ mode: "open" });
+      this.shadowRoot.innerHTML =
+        "<style>:host{display:block;padding:10px 12px;border-radius:8px;font-size:14px;" +
+        "background:color-mix(in srgb,var(--warning-color) 14%,transparent);" +
+        "border-left:4px solid var(--warning-color)}</style><slot></slot>";
+    }
+  }
+  customElements.define("ha-alert", HaAlert);
+</script>
+<script src="../custom_components/tyre_tracker/frontend/tyres-card.js"></script>
+<script>
+  // ---- demo state ---------------------------------------------------------
+  const now = Date.now();
+  const iso = (msAgo) => new Date(now - msAgo).toISOString();
+  const H = 3600e3, D = 24 * H;
+
+  const wheel = (slot, label, extra) => [slot, {
+    label, entity_id: "sensor.tpms_" + slot,
+    pressure: 2.4, unit: "bar", temperature: 21, temperature_unit: "°C",
+    battery: 76, last_seen: iso(9e5), available: true, stale: false,
+    alarm: false, ...extra,
+  }];
+
+  const tpms = Object.fromEntries([
+    wheel("front_left", "FL", { temperature: 21 }),
+    wheel("front_right", "FR", { temperature: 22, battery: 81 }),
+    wheel("rear_left", "RL", { pressure: 1.7, temperature: 19, alarm: true }),
+    wheel("rear_right", "RR", { pressure: 2.2, last_seen: iso(3 * D), stale: true, alarm: null }),
+  ]);
+
+  const crossclimate = {
+    id: "set1", label: "", reference: "Michelin CrossClimate 2",
+    season: "all_season", size: "205/45 R17", dot: "3223",
+    km: 23180, mounted: true, axle: "all", positions: ["front", "rear"],
+    mounted_since: iso(280 * D), retired: false, retired_at: null,
+    age_years: 2.9, aged: false, price: 624, cost_per_1000km: 26.9,
+    storage: "", tpms, rotation_due: false, km_since_rotation: 4210,
+  };
+  const alpin = {
+    id: "set2", label: "", reference: "Michelin Alpin 6",
+    season: "winter", size: "205/45 R17", dot: "3822",
+    km: 18450, mounted: false, axle: "all", positions: [],
+    mounted_since: null, retired: false, retired_at: null,
+    age_years: 3.8, aged: false, price: 580, cost_per_1000km: 31.4,
+    storage: "garage, left shelf", tpms: {}, rotation_due: false,
+    km_since_rotation: null,
+  };
+  const pirelli = {
+    id: "set3", label: "", reference: "Pirelli Cinturato P7",
+    season: "summer", size: "205/45 R17", dot: "1519",
+    km: 41230, mounted: false, axle: "all", positions: [],
+    mounted_since: null, retired: true, retired_at: iso(500 * D),
+    age_years: 10.2, aged: true, price: 540, cost_per_1000km: 13.1,
+    storage: "", tpms: {}, rotation_due: false, km_since_rotation: null,
+  };
+
+  const fittedEntry = {
+    id: "set1", label: "Michelin CrossClimate 2",
+    reference: "Michelin CrossClimate 2", season: "all_season", axle: "all",
+    km: 23180, mounted_since: crossclimate.mounted_since,
+  };
+
+  const pressures = Object.fromEntries(
+    Object.entries(tpms).map(([corner, read]) => [corner, { ...read, set_id: "set1" }])
+  );
+
+  const hass = {
+    language: "en",
+    locale: { language: "en" },
+    states: {
+      "sensor.clio_v_tyres": {
+        entity_id: "sensor.clio_v_tyres",
+        state: "Michelin CrossClimate 2",
+        last_changed: iso(H), last_updated: iso(H),
+        attributes: {
+          entry_id: "demo", vehicle: "Clio V",
+          odometer: 68420, odometer_auto: true, rotation_interval: 10000,
+          fitted: { front: fittedEntry, rear: fittedEntry },
+          pressures, pressure_alarm: ["rear_left"],
+          sets: [crossclimate, alpin, pirelli],
+          last_swap: null,
+          friendly_name: "Clio V Tyres",
+        },
+      },
+      "binary_sensor.snowtire": {
+        entity_id: "binary_sensor.snowtire", state: "on",
+        last_changed: iso(H), last_updated: iso(H), attributes: {},
+      },
+    },
+  };
+
+  // ---- mount --------------------------------------------------------------
+  const params = new URLSearchParams(location.search);
+  document.body.dataset.theme = params.get("theme") === "dark" ? "dark" : "light";
+  const stage = document.getElementById("stage");
+
+  if (params.get("view") === "badge") {
+    document.body.classList.add("badge-view");
+    const badge = document.createElement("floor-tyres-badge");
+    badge.setConfig({
+      entity: "sensor.clio_v_tyres",
+      pressures: true,
+      advice_entity: "binary_sensor.snowtire",
+    });
+    badge.hass = hass;
+    stage.appendChild(badge);
+  } else {
+    const card = document.createElement("tyres-card");
+    card.setConfig({ entity: "sensor.clio_v_tyres" });
+    card.hass = hass;
+    stage.appendChild(card);
+  }
+</script>
+</body>
+</html>

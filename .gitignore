@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.venv/
+.vscode/
+# Real .storage files copied in for inspection — personal data, never committed.
+/tyre_tracker.*

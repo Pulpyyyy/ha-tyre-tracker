@@ -1,0 +1,34 @@
+{
+  "entity": {
+    "select": {
+      "mounted_front": {
+        "default": "mdi:car-tire-alert"
+      },
+      "mounted_rear": {
+        "default": "mdi:car-tire-alert"
+      }
+    },
+    "number": {
+      "odometer": {
+        "default": "mdi:counter"
+      },
+      "total": {
+        "default": "mdi:counter"
+      }
+    },
+    "sensor": {
+      "current": {
+        "default": "mdi:car-tire-alert"
+      }
+    }
+  },
+  "services": {
+    "mount": "mdi:swap-horizontal",
+    "set_odometer": "mdi:counter",
+    "adjust": "mdi:pencil",
+    "retire": "mdi:archive-outline",
+    "restore": "mdi:archive-arrow-up-outline",
+    "unmount": "mdi:tire",
+    "rotate": "mdi:rotate-3d-variant"
+  }
+}
