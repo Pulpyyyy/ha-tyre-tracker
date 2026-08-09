@@ -6,9 +6,11 @@ component composes — a device model, a sensor state built from two set names,
 the line every step of the options flow opens with. Those are strings this code
 builds, and no `strings.json` key can reach them.
 
-So the integration reads its own translation file. Same files, same language
-selection, one section apart — `words` — that only this module knows about.
-Read once per language, from the executor, and kept for the run.
+So the integration keeps its own vocabulary files, one per language, under
+`words/` — beside `translations/` and following the same language selection,
+but out of it: hassfest validates the Home Assistant translation files against
+a fixed schema, and a section of ours has no place in it. Read once per
+language, from the executor, and kept for the run.
 
 The fallback is English rather than the key: a vocabulary missing a word should
 read oddly in one language, not show `status.mounted` in the middle of a
@@ -25,7 +27,7 @@ from homeassistant.core import HomeAssistant
 
 from .const import DOMAIN
 
-TRANSLATIONS: Final = Path(__file__).parent / "translations"
+WORDS_DIR: Final = Path(__file__).parent / "words"
 FALLBACK_LANGUAGE: Final = "en"
 
 # Where the loaded vocabularies sit, one per language asked for.
@@ -97,11 +99,11 @@ def _walk(table: dict[str, Any], path: str) -> Any:
 
 
 def _read(language: str) -> dict[str, Any]:
-    """The `words` section of one translation file. Empty when there is none."""
-    path = TRANSLATIONS / f"{language}.json"
+    """One language's vocabulary file. Empty when there is none."""
+    path = WORDS_DIR / f"{language}.json"
     try:
         with path.open(encoding="utf-8") as handle:
-            return json.load(handle).get("words") or {}
+            return json.load(handle) or {}
     except (OSError, ValueError):
         return {}
 

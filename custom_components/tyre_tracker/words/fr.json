@@ -1,0 +1,51 @@
+{
+  "_comment": "Les mots que le composant assemble lui-même. La mécanique de Home Assistant ne les atteint pas — un modèle d'appareil, un état construit sur deux noms, la ligne qui ouvre un pas de flux — alors le composant lit cette section dans son propre fichier de traduction et fait l'assemblage.",
+  "axle": {
+    "all": "4 roues",
+    "pair": "2 roues"
+  },
+  "position": {
+    "front": "avant",
+    "rear": "arrière"
+  },
+  "position_short": {
+    "front": "AV",
+    "rear": "AR"
+  },
+  "corner": {
+    "front_left": "AVG",
+    "front_right": "AVD",
+    "rear_left": "ARG",
+    "rear_right": "ARD"
+  },
+  "side": {
+    "left": "gauche",
+    "right": "droite"
+  },
+  "season": {
+    "summer": "été",
+    "winter": "hiver",
+    "all_season": "4 saisons"
+  },
+  "device": {
+    "vehicle": "Véhicule",
+    "tyre_set": "Train de pneus"
+  },
+  "set": {
+    "fallback": "Train"
+  },
+  "status": {
+    "mounted": "monté",
+    "mounted_at": "monté à l'{position}",
+    "removed": "déposé",
+    "retired": "à l'historique",
+    "history": "historique"
+  },
+  "entry_title": {
+    "template": "Suivi {article}{vehicle}",
+    "empty": "Suivi",
+    "article": "de ",
+    "article_elided": "d’",
+    "elides_before": "aeiouâàäéèêëîïôöùûü"
+  }
+}

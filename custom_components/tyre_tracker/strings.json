@@ -444,56 +444,5 @@
     "odometer_backwards": {
       "message": "An odometer does not go backwards: {value} km is below the {tracked} km already recorded. Change the odometer source if the counter really did change."
     }
-  },
-  "words": {
-    "_comment": "Words the integration composes itself. Home Assistant's own machinery cannot reach these — a device model, a state built from two names, the line a flow step opens with — so the integration reads this section from its own translation file and does the composing.",
-    "axle": {
-      "all": "4 wheels",
-      "pair": "2 wheels"
-    },
-    "position": {
-      "front": "front",
-      "rear": "rear"
-    },
-    "position_short": {
-      "front": "F",
-      "rear": "R"
-    },
-    "corner": {
-      "front_left": "FL",
-      "front_right": "FR",
-      "rear_left": "RL",
-      "rear_right": "RR"
-    },
-    "side": {
-      "left": "left",
-      "right": "right"
-    },
-    "season": {
-      "summer": "Summer",
-      "winter": "Winter",
-      "all_season": "All-season"
-    },
-    "device": {
-      "vehicle": "Vehicle",
-      "tyre_set": "Tyre set"
-    },
-    "set": {
-      "fallback": "Set"
-    },
-    "status": {
-      "mounted": "fitted",
-      "mounted_at": "fitted at the {position}",
-      "removed": "off the car",
-      "retired": "in the history",
-      "history": "history"
-    },
-    "entry_title": {
-      "template": "{article}{vehicle} tyres",
-      "empty": "Tyre tracking",
-      "article": "",
-      "article_elided": "",
-      "elides_before": ""
-    }
   }
 }

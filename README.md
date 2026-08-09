@@ -191,11 +191,14 @@ a tyre at 1.4 bar needs air, a tyre whose cell died needs a sensor.
 
 ## Translating
 
-Two files, both under `custom_components/tyre_tracker/`:
+Three files, all under `custom_components/tyre_tracker/`:
 
-- `translations/<lang>.json` — everything Home Assistant displays, plus a
-  `words` section the integration composes itself (device models, sensor
-  states, the line each flow step opens with). Copy `en.json` and translate.
+- `translations/<lang>.json` — everything Home Assistant displays: the config
+  flow, entity names, service descriptions, error messages. Copy `en.json`
+  and translate.
+- `words/<lang>.json` — the words the integration composes itself (device
+  models, sensor states, the line each flow step opens with). Kept apart from
+  `translations/` because hassfest validates those against a fixed schema.
 - `frontend/tyres-card.js` — the card's own `WORDS` dictionary, near the top.
   Add a language key beside `en` and `fr`.
 
