@@ -23,12 +23,12 @@
     }
   },
   "services": {
-    "mount": "mdi:swap-horizontal",
-    "set_odometer": "mdi:counter",
-    "adjust": "mdi:pencil",
-    "retire": "mdi:archive-outline",
-    "restore": "mdi:archive-arrow-up-outline",
-    "unmount": "mdi:tire",
-    "rotate": "mdi:rotate-3d-variant"
+    "mount": { "service": "mdi:swap-horizontal" },
+    "set_odometer": { "service": "mdi:counter" },
+    "adjust": { "service": "mdi:pencil" },
+    "retire": { "service": "mdi:archive-outline" },
+    "restore": { "service": "mdi:archive-arrow-up-outline" },
+    "unmount": { "service": "mdi:tire" },
+    "rotate": { "service": "mdi:rotate-3d-variant" }
   }
 }

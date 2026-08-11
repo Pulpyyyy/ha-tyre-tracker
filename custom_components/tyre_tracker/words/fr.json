@@ -39,7 +39,8 @@
     "mounted_at": "monté à l'{position}",
     "removed": "déposé",
     "retired": "à l'historique",
-    "history": "historique"
+    "history": "historique",
+    "bare": "Aucun train"
   },
   "entry_title": {
     "template": "Suivi {article}{vehicle}",

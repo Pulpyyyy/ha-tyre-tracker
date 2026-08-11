@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
-import json
-from pathlib import Path
 from typing import Final
 
 DOMAIN: Final = "tyre_tracker"
 
+# The schema the released integration ships with. Held here rather than only on
+# the flow class so `async_migrate_entry` can answer without importing it.
+CONFIG_VERSION: Final = 3
+
 # The manifest is the single place the version is written. The card resource
 # carries it as `?v=`, so an upgrade invalidates the browser cache on its own.
-MANIFEST_PATH: Final = Path(__file__).parent / "manifest.json"
-with MANIFEST_PATH.open(encoding="utf-8") as manifest_file:
-    INTEGRATION_VERSION: Final[str] = json.load(manifest_file).get("version", "0.0.0")
+# Read through `async_get_integration`, which already holds the parsed manifest:
+# opening the file here would be disk I/O at import time, for a string Home
+# Assistant has in hand.
+FALLBACK_VERSION: Final = "0.0.0"
 
 # Frontend. The card ships with the integration and is served from its own
 # folder: a HACS install brings it along, with nothing to copy into `www/`.

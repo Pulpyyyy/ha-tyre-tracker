@@ -1,47 +1,46 @@
 /*!
- * tyres-card        — le parc de pneumatiques d'un vehicule, et ses manoeuvres.
- * floor-tyres-badge — le meme etat, reduit a une pastille de plan.
+ * tyres-card        — a vehicle's tyre stock, and the manoeuvres done to it.
+ * floor-tyres-badge — the same state, shrunk to a floor-plan badge.
  *
- * Les deux elements vivent dans ce fichier parce qu'ils lisent la meme
- * entite — le capteur « Pneumatiques » du composant tyre_tracker — et que la
- * pastille n'est que la carte vue de loin.
+ * Both elements live in this file because they read the same entity — the
+ * "Tyres" sensor of the tyre_tracker component — and the badge is only the
+ * card seen from a distance.
  *
- * Ils remplacent le template streamline `floor_pneus_planxy_v2`, un
- * mushroom-chips-card deshabille par une dizaine de regles `!important`, dont
- * les six expressions Jinja testaient `binary_sensor.snowtire` — une entite
- * jamais creee, si bien que la condition etait toujours fausse et la pastille
- * affichait « Ete » en permanence. Le popup, lui, empilait deux
- * mushroom-title-card, deux grid et quatre numberbox-card pour editer quatre
- * des six compteurs existants.
+ * They replace the streamline template `floor_pneus_planxy_v2`, a
+ * mushroom-chips-card stripped bare by a dozen `!important` rules, whose six
+ * Jinja expressions tested `binary_sensor.snowtire` — an entity that was never
+ * created, so the condition was always false and the badge read "Summer" for
+ * ever. The popup, for its part, stacked two mushroom-title-card, two grid and
+ * four numberbox-card to edit four of the six counters that existed.
  *
- * Toute la matiere vient d'un seul attribut : `sets` porte une fiche complete
- * par jeu, `fitted` dit ce qui est monte a l'avant et a l'arriere. Une lecture,
- * aucun calcul cote carte — le kilometrage vivant est deja resolu par le
- * coordinateur, qui seul connait l'odometre de pose.
+ * Everything shown comes from a single attribute: `sets` carries a complete
+ * record per set, `fitted` says what is on the front and on the rear. One
+ * read, no arithmetic on the card side — the live mileage is already resolved
+ * by the coordinator, the only thing that knows the mount odometer.
  *
- * Ce qui s'ecrit passe par les services du composant quand c'est une manoeuvre
- * — monter, deposer, permuter — et par le flux d'options quand c'est une fiche.
- * Ce flux-la, la carte le conduit en REST sans jamais montrer ses ecrans : elle
- * lit le schema d'un pas pour savoir quoi demander, dessine ses propres champs,
- * et reposte sous les memes noms. Les regles restent donc ecrites une seule
- * fois, en Python, et servent aussi bien Parametres — ou l'integration doit
- * rester utilisable sans la carte — que la carte, ou elles se presentent
- * autrement. `config_flow.py` decrit, `tyres-card.js` met en forme.
+ * What is written goes through the component's services when it is a manoeuvre
+ * — fit, remove, rotate — and through the options flow when it is a record.
+ * That flow the card drives over REST without ever showing its screens: it
+ * reads a step's schema to know what to ask, draws its own fields, and posts
+ * back under the same names. The rules therefore stay written once, in Python,
+ * and serve Settings — where the integration has to remain usable without the
+ * card — as well as the card, where they present themselves differently.
+ * `config_flow.py` describes, `tyres-card.js` gives shape.
  *
- * Le fichier est livre par le composant lui-meme (custom_components/
- * tyre_tracker/frontend/), qui l'expose sur /tyre_tracker_frontend/tyres-card.js et
- * l'inscrit dans les ressources Lovelace : installer l'integration suffit,
- * rien a copier dans www/. Il est donc autonome — les cinq utilitaires que
- * les cartes du dossier www/floorplan/ se partagent dans `common.js` sont
- * recopies ci-dessous plutot qu'importes, car une carte distribuee par HACS
- * ne peut pas dependre d'un fichier de la configuration de l'utilisateur.
+ * The file is delivered by the component itself (custom_components/
+ * tyre_tracker/frontend/), which serves it at /tyre_tracker_frontend/tyres-card.js
+ * and registers it in the Lovelace resources: installing the integration is the
+ * whole setup, nothing to copy into www/. It is therefore self-contained — the
+ * five utilities the cards under www/floorplan/ share through `common.js` are
+ * copied below rather than imported, because a card distributed by HACS cannot
+ * depend on a file belonging to the user's configuration.
  *
- * Ecrit en JS natif (pas de build, pas de dependance).
+ * Written in plain JS (no build, no dependency).
  */
 
-/* ---------- utilitaires (repris de www/floorplan/common.js) ---------- */
+/* ---------- utilities (taken from www/floorplan/common.js) ---------- */
 
-/** La banniere de console. */
+/** The console banner. */
 function banner(name, version) {
   console.info(
     `%c 🙂 ${name} %c v${version} %c`,
@@ -52,17 +51,16 @@ function banner(name, version) {
 }
 
 /**
- * Execute l'action d'un element, quelle qu'elle soit.
+ * Perform an element's action, whatever it is.
  *
- * Toutes les formes que Lovelace connait sont ici, y compris celles qu'aucune
- * des deux cartes n'utilise encore : c'est le seul moyen qu'une action
- * configuree fasse ce qu'elle annonce plutot que de retomber en silence sur
- * `more-info`.
+ * Every shape Lovelace knows is here, including those neither card uses yet:
+ * it is the only way a configured action does what it says rather than falling
+ * back silently on `more-info`.
  *
- * `fire-dom-event` part en `ll-custom`, le canal qu'ecoute browser_mod : la
- * carte n'a ainsi pas a connaitre browser_mod, et la configuration du popup
- * reste dans le YAML. `toggle` sur un bouton devient un `press` :
- * `homeassistant.toggle` ne sait rien faire d'un `button`.
+ * `fire-dom-event` leaves as `ll-custom`, the channel browser_mod listens on:
+ * the card therefore does not have to know about browser_mod, and the popup's
+ * configuration stays in the YAML. `toggle` on a button becomes a `press`:
+ * `homeassistant.toggle` can do nothing with a `button`.
  */
 function performAction(el, hass, action, entityId) {
   const emit = (type, detail) =>
@@ -97,8 +95,8 @@ function performAction(el, hass, action, entityId) {
       return;
 
     case "url": {
-      // Une URL de configuration reste une URL : `javascript:` s'executerait
-      // dans la page. On n'ouvre que ce qui navigue.
+      // A configuration URL is still a URL: `javascript:` would run in the
+      // page. Only what navigates is opened.
       const url = String(action.url_path ?? "");
       if (!/^(https?:\/\/|\/)/.test(url)) return;
       window.open(url, "_blank", "noreferrer");
@@ -111,9 +109,9 @@ function performAction(el, hass, action, entityId) {
 
     case "perform-action":
     case "call-service": {
-      // La cible est un quatrieme argument, pas des donnees de service : un
-      // entity_id passe en donnees marche encore par heritage, un area_id ou
-      // un device_id serait ignore sans un mot.
+      // The target is a fourth argument, not service data: an entity_id
+      // passed as data still works by inheritance, an area_id or a
+      // device_id would be dropped without a word.
       const [domain, service] = String(action.perform_action ?? action.service ?? "").split(".");
       if (!domain || !service || !hass) return;
       hass.callService(domain, service, { ...(action.data ?? {}) }, action.target);
@@ -126,29 +124,29 @@ function performAction(el, hass, action, entityId) {
 }
 
 /**
- * La feuille d'une pastille de plan.
+ * The style sheet of a floor-plan badge.
  *
- * Les pastilles de plan ne sont pas des cartes : elles n'ont ni ha-card ni
- * fond de theme, et doivent rester a la taille de leur texte — c'est la cle
- * `style` du picture-elements qui les place, et son `translate: -50% -100%`
- * ne tombe juste que si la boite ne triche pas sur sa taille.
+ * Floor-plan badges are not cards: they have neither ha-card nor theme
+ * background, and have to stay the size of their text — it is the
+ * picture-elements `style` key that places them, and its `translate: -50%
+ * -100%` only lands right if the box does not lie about its size.
  *
- * `dashed` reste au pointille des volets : c'est leur signature sur le plan,
- * et le partager la banaliserait. Les autres pastilles portent un trait plein.
+ * `dashed` is left to the shutters: it is their signature on the plan, and
+ * sharing it would make it ordinary. The other badges carry a solid stroke.
  */
 function planBadgeStyle({ dashed = false } = {}) {
   return `
   :host {
     display: inline-block;
     --badge-color: #fff;
-    /* Les elements \`icon\` des templates streamline voisins posent
-       \`rgba(102, 102, 102, 0.7)\`. La pastille va plus sombre : eux n'abritent
-       qu'une icone, elle porte du texte, et un gris moyen sous du blanc de
-       13 px ne donne pas de quoi le detacher du mur clair.
+    /* The \`icon\` elements of the neighbouring streamline templates set
+       \`rgba(102, 102, 102, 0.7)\`. The badge goes darker: they hold nothing but
+       an icon, it carries text, and a mid grey under 13 px of white gives
+       nothing to lift it off a pale wall.
 
-       Pour ajuster : le premier triplet est la teinte (0 = noir), le dernier
-       nombre l'opacite. Monter l'opacite masque le plan, baisser la teinte
-       assombrit sans le cacher. */
+       To adjust: the first triplet is the shade (0 = black), the last number
+       the opacity. Raising the opacity hides the plan, lowering the shade
+       darkens without covering it. */
     --badge-background: rgba(51, 51, 51, 0.75);
   }
 
@@ -159,16 +157,17 @@ function planBadgeStyle({ dashed = false } = {}) {
     gap: 4px;
     padding: 2px 6px;
     border: 1px ${dashed ? "dashed" : "solid"} var(--badge-color);
-    /* Le fond est systematique, et non conditionne a la clarte du dessous : la
-       pastille flotte sur un plan ou toit clair et mur sombre se touchent, et
-       une meme pastille peut chevaucher les deux.
+    /* The background is unconditional rather than tied to how pale what lies
+       under it is: the badge floats over a plan where a light roof and a dark
+       wall touch, and one badge may straddle both.
 
-       \`padding-box\` l'arrete au bord interieur du trait : par defaut un fond
-       s'etend sous la bordure et ressort dans les creux d'un pointille. */
+       \`padding-box\` stops it at the inner edge of the stroke: by default a
+       background runs under the border and shows through the gaps of a dashed
+       one. */
     background: var(--badge-background);
     background-clip: padding-box;
-    /* Sans rayon, le fond fait une plaque rectangulaire dure au milieu d'un
-       dessin en projection. Quatre pixels suffisent a l'adoucir. */
+    /* Without a radius the background makes a hard rectangular plate in the
+       middle of a projected drawing. Four pixels are enough to soften it. */
     border-radius: 4px;
     white-space: nowrap;
     color: var(--badge-color);
@@ -176,8 +175,8 @@ function planBadgeStyle({ dashed = false } = {}) {
     font-size: 13px;
     line-height: 1;
     cursor: pointer;
-    /* Le fond etant translucide, le contraste reste faible sur un toit tres
-       clair : l'ombre portee garde son role, en appoint. */
+    /* The background being translucent, the contrast stays low on a very pale
+       roof: the drop shadow keeps its part, as a support. */
     text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
     -webkit-tap-highlight-color: transparent;
     -webkit-touch-callout: none;
@@ -190,21 +189,21 @@ function planBadgeStyle({ dashed = false } = {}) {
     outline-offset: 2px;
   }
 
-  /* Zone sensible debordante. Le libelle fait une vingtaine de pixels de haut,
-     bien en dessous des 24 px minimum du WCAG 2.2, et on la vise au doigt sur
-     un plan ou rien n'est agrandi. Le debordement passe par un pseudo-element
-     plutot que par du remplissage : la pastille garde sa taille, donc son
-     placement isometrique reste juste. */
+  /* An overflowing hit area. The label is some twenty pixels tall, well under
+     the 24 px minimum of WCAG 2.2, and it is aimed at with a finger on a plan
+     where nothing is enlarged. The overflow goes through a pseudo-element
+     rather than through padding: the badge keeps its size, so its isometric
+     placement stays right. */
   .badge::after {
     content: "";
     position: absolute;
     inset: -7px -6px;
   }
 
-  /* ha-icon ne porte aucune regle de taille sur son hote : tout vit sur le
-     ha-svg-icon qu'il contient, lequel est de niveau ligne. Sans \`flex\`, il
-     cree une boite de ligne dimensionnee par le line-height herite et le
-     glyphe deborde vers le haut. */
+  /* ha-icon carries no sizing rule on its host: everything lives on the
+     ha-svg-icon it contains, which is inline-level. Without \`flex\` it makes a
+     line box sized by the inherited line-height and the glyph overflows
+     upwards. */
   ha-icon {
     flex: 0 0 auto;
     display: flex;
@@ -217,8 +216,8 @@ function planBadgeStyle({ dashed = false } = {}) {
   }
   ha-icon[hidden] { display: none; }
 
-  /* Le libelle rend la descente que « Fermé » n'utilise pas, faute de quoi son
-     encre parait plus haute que le centre des icones. */
+  /* The label renders the descender "Fermé" does not use, failing which its
+     ink looks higher than the centre of the icons. */
   .label {
     display: block;
     padding-top: 1px;
@@ -228,10 +227,10 @@ function planBadgeStyle({ dashed = false } = {}) {
 }
 
 /**
- * Un editeur `ha-form` pour une carte, a partir de son schema.
+ * An `ha-form` editor for a card, built from its schema.
  *
- * La configuration renvoyee part de celle recue : le formulaire ignore `type`
- * et `view_layout`, qui doivent survivre a une modification.
+ * The configuration handed back starts from the one received: the form knows
+ * nothing of `type` and `view_layout`, which have to survive an edit.
  */
 function defineEditor(tag, schema, labels = {}) {
   if (customElements.get(tag)) return tag;
@@ -285,12 +284,12 @@ function defineEditor(tag, schema, labels = {}) {
 }
 
 /**
- * Home Assistant reaffecte `hass` a chaque changement d'etat de la maison,
- * mais reutilise l'objet d'etat des entites qui n'ont pas bouge : une
- * comparaison de reference par entite ecarte donc en quelques instructions
- * toutes les poussees qui ne nous concernent pas — la quasi-totalite.
+ * Home Assistant reassigns `hass` at every state change in the house, but
+ * reuses the state object of entities that have not moved: a reference
+ * comparison per entity therefore discards, in a handful of instructions,
+ * every push that does not concern us — very nearly all of them.
  *
- * `seen` est une table tenue par l'appelant, mise a jour au passage.
+ * `seen` is a table held by the caller, updated in passing.
  */
 function watch(hass, ids, seen) {
   let changed = false;
@@ -303,21 +302,20 @@ function watch(hass, ids, seen) {
   return changed;
 }
 
-/* ---------- les mots ----------
+/* ---------- the words ----------
 
-   Une carte Lovelace ne peut pas lire `strings.json` : les categories que Home
-   Assistant sert au navigateur sont fixees, et rien n'y accueille la prose
-   d'une carte. Elle porte donc son propre dictionnaire, ce que font toutes les
-   cartes distribuees.
+   A Lovelace card cannot read `strings.json`: the categories Home Assistant
+   serves to the browser are fixed, and none of them houses a card's prose. It
+   therefore carries its own dictionary, as every distributed card does.
 
-   La langue vient de `hass.locale.language`, celle que l'utilisateur a choisie
-   pour lui — et non celle du serveur, qui nomme les appareils et compose les
-   etats cote Python. Deux personnes regardant le meme tableau de bord le
-   lisent donc chacune dans la sienne.
+   The language comes from `hass.locale.language`, the one the user chose for
+   themselves — and not the server's, which names the devices and composes the
+   states on the Python side. Two people looking at the same dashboard each
+   read it in their own.
 
-   L'anglais sert de repli, cle par cle : une traduction incomplete laisse
-   passer un mot anglais au milieu d'une phrase francaise, ce qui se voit et se
-   corrige, la ou une cle brute ne se lit pas du tout. */
+   English is the fallback, key by key: an incomplete translation lets an
+   English word through in the middle of a French sentence, which is seen and
+   corrected, where a bare key cannot be read at all. */
 
 const WORDS = {
   en: {
@@ -714,7 +712,7 @@ const WORDS = {
   },
 };
 
-/** « fr-CA » n'a pas de dictionnaire : sa base en a un, et c'est la reponse. */
+/** "fr-CA" has no dictionary: its base language has one, and that is the answer. */
 function pickLanguage(want) {
   const asked = String(want || "en");
   const base = asked.split("-")[0];
@@ -722,76 +720,93 @@ function pickLanguage(want) {
 }
 
 /**
- * La langue du lecteur.
+ * The reader's language.
  *
- * Devinee des le chargement sur l'attribut `lang` de la page, parce que
- * certaines choses se disent avant qu'aucun `hass` ne soit arrive : la
- * description que le selecteur de cartes affiche, les libelles de l'editeur.
- * Puis confirmee par `hass.locale`, qui porte le choix explicite de la
- * personne plutot que celui de son navigateur.
+ * Guessed at load time from the page's `lang` attribute, because some things
+ * are said before any `hass` has arrived: the description the card picker
+ * shows, the editor's labels. Then confirmed by `hass.locale`, which carries
+ * the person's explicit choice rather than their browser's.
  */
 let LANG = pickLanguage(
   (typeof document !== "undefined" && document.documentElement?.lang) ||
     (typeof navigator !== "undefined" && navigator.language)
 );
 
-/** Reglee a chaque poussee d'etat, avant tout dessin. */
+/** Set at every state push, before anything is drawn. */
 function setLanguage(hass) {
   LANG = pickLanguage(hass?.locale?.language || hass?.language || LANG);
 }
 
-/** Un mot, et ce qu'on lui glisse entre accolades. */
+/** A word, and what is slipped between its braces. */
 function t(key, ph) {
   const said = WORDS[LANG]?.[key] ?? WORDS.en[key] ?? key;
   return ph ? said.replace(/\{(\w+)\}/g, (whole, name) => ph[name] ?? whole) : said;
 }
 
-/* ---------- carte ---------- */
+/* ---------- card ---------- */
 
-const CARD_VERSION = "1.0.0";
+/**
+ * The version, read off the address this module arrived by.
+ *
+ * The integration registers the resource as `?v=<manifest version>` — that
+ * suffix is what invalidates the browser cache at every upgrade — and
+ * `import.meta.url` carries the address verbatim. Written out here, the
+ * version had to be bumped in two places, and the console banner ended up
+ * announcing a version the file no longer was.
+ *
+ * "dev" when there is none: a resource added by hand in YAML mode, or the file
+ * opened directly. Not an error, only an address without a number.
+ */
+const CARD_VERSION = (() => {
+  try {
+    return new URL(import.meta.url).searchParams.get("v") || "dev";
+  } catch {
+    return "dev";
+  }
+})();
 banner("Tyres Card", CARD_VERSION);
 
 /* ---------- configuration ----------
 
-   La pastille, posee dans un picture-elements :
+   The badge, placed in a picture-elements:
 
      type: custom:floor-tyres-badge
      entity: sensor.alfa_pneumatiques
-     advice_entity: binary_sensor.snowtire   optionnel, conseil de permutation
-     pressures: true                         optionnel, grille TPMS 2x2 dessous
-     tap_action: { ... }                     optionnel, defaut : popup ci-dessous
+     advice_entity: binary_sensor.snowtire   optional, rotation advice
+     pressures: true                         optional, 2x2 TPMS grid underneath
+     tap_action: { ... }                     optional, default: the popup below
      style: { top: 40%, left: 62%, transform: ... }
 
-   La carte, dans une vue ou un popup :
+   The card, in a view or a popup:
 
      type: custom:tyres-card
      entity: sensor.alfa_pneumatiques
-     title: Alfa GT                          optionnel, defaut : le vehicule  */
+     title: Alfa GT                          optional, default: the vehicle  */
 
-/** Le service du composant, cible sur le capteur qui porte l'etat. */
+/** The component's service, aimed at the sensor that carries the state. */
 const DOMAIN = "tyre_tracker";
 
 /**
- * Les trois marquages d'un flanc, et la teinte qui va avec.
+ * The three markings of a sidewall, and the shade that goes with each.
  *
- * Le soleil est `white-balance-sunny` et non `weather-sunny` : celui-la dessine
- * un anneau, et un anneau reduit aux 15 px d'une pastille de plan ne pese pas
- * plus qu'un flocon. Un disque plein face a une etoile ajouree, c'est une
- * difference de masse — elle tient a toutes les tailles, et sur la pastille,
- * ou tout est blanc, la teinte ne vient au secours de rien.
+ * The sun is `white-balance-sunny` and not `weather-sunny`: the latter draws a
+ * ring, and a ring shrunk to the 15 px of a floor-plan badge weighs no more
+ * than a snowflake. A filled disc against an open star is a difference of
+ * mass — it survives any size, and on the badge, where everything is white,
+ * the shade comes to nobody's rescue.
  */
-/* Les teintes sont celles du theme, pas les notres. Home Assistant publie une
-   palette que chaque theme redefinit : s'en servir, c'est suivre l'interface
-   au lieu de poser trois couleurs a cote d'elle. La valeur de repli garde
-   l'apparence voulue sur un core qui ne connaitrait pas encore le jeton.
+/* The shades are the theme's, not ours. Home Assistant publishes a palette
+   every theme redefines: using it is following the interface instead of
+   setting three colours down beside it. The fallback value keeps the intended
+   look on a core that would not know the token yet.
 
-   Consequence, et c'est le point : `tint` n'est plus une chaine hexadecimale.
-   Rien ne doit plus lui coller un suffixe d'opacite — ce qui en derive se
-   calcule en CSS, ou une teinte reste une couleur. */
-/* Les mots sont des accesseurs et non des valeurs. Une table construite au
-   chargement du module fige la langue devinee a cet instant : `hass` arrive
-   apres, et quelqu'un peut changer la sienne sans recharger la page. Une icone
-   et une teinte, elles, ne parlent aucune langue et restent des valeurs. */
+   The consequence, and it is the point: `tint` is no longer a hex string.
+   Nothing may append an opacity suffix to it any more — what derives from it
+   is computed in CSS, where a shade stays a colour. */
+/* The words are accessors and not values. A table built when the module loads
+   freezes the language guessed at that instant: `hass` arrives afterwards, and
+   somebody may change theirs without reloading the page. An icon and a shade,
+   for their part, speak no language and stay values. */
 const SEASONS = {
   summer: {
     icon: "mdi:white-balance-sunny",
@@ -823,9 +838,9 @@ const RETIRED = {
   tint: "var(--grey-color, #9e9e9e)",
 };
 
-/* « 2 roues » et non « paire » : c'est le mot du flux de configuration, et un
-   train doit se lire pareil partout — sur la pastille, dans la liste, dans la
-   feuille et dans le formulaire ou on le modifie. */
+/* "2 wheels" and not "pair": it is the configuration flow's word, and a set
+   has to read the same way everywhere — on the badge, in the list, in the
+   sheet and in the form where it is edited. */
 const AXLES = {
   get all() {
     return t("axle.all");
@@ -835,19 +850,19 @@ const AXLES = {
   },
 };
 
-/* La meme quantite, en icone. Elle etait deja choisie — le formulaire de
-   configuration montre ces deux la — mais elle s'arretait au formulaire : le
-   corps de carte ecrivait « 4 roues », la pastille de plan « ×4 ». Trois
-   dialectes pour un fait, contre la regle que ce fichier se donne plus haut.
+/* The same quantity, as an icon. It was chosen already — the configuration
+   form shows these two — but it stopped at the form: the card body wrote
+   "4 wheels", the floor-plan badge "×4". Three dialects for one fact, against
+   the rule this file gives itself further up.
 
-   Le mot ne disparait pas pour autant : il devient le nom accessible, donc ce
-   que lit un lecteur d'ecran et ce que dit l'infobulle. */
+   The word does not disappear for all that: it becomes the accessible name,
+   therefore what a screen reader reads and what the tooltip says. */
 const AXLE_ICONS = {
   all: "mdi:numeric-4-box-outline",
   pair: "mdi:numeric-2-box-outline",
 };
 
-/** L'icone de quantite d'un jeu, ou rien quand l'essieu est inconnu. */
+/** A set's quantity icon, or nothing when the axle is unknown. */
 function axleIcon(axle) {
   if (!AXLE_ICONS[axle]) return null;
   const el = makeIcon(AXLE_ICONS[axle]);
@@ -867,13 +882,13 @@ const POSITIONS = {
 };
 const AXES = ["front", "rear"];
 
-/* L'ordre de lecture d'une voiture vue de dessus : avant en haut, gauche a
-   gauche. La grille des pressions suit cette liste et n'a rien a trier. */
+/* The reading order of a car seen from above: front at the top, left on the
+   left. The pressure grid follows this list and has nothing to sort. */
 const CORNERS = ["front_left", "front_right", "rear_left", "rear_right"];
 
-/* Les memes coins en toutes lettres. Le formulaire les abrege — « AVG », un
-   mot de trois lettres sous une case — mais une infobulle et un lecteur
-   d'ecran ne lisent pas des sigles : ils disent ou est la roue. */
+/* The same corners spelt out. The form abbreviates them — "FL", a three-letter
+   word under a box — but a tooltip and a screen reader do not read initials:
+   they say where the wheel is. */
 const CORNER_LABELS = {
   get front_left() {
     return t("corner.front_left");
@@ -889,9 +904,9 @@ const CORNER_LABELS = {
   },
 };
 
-/* Les memes coins en sigles, pour les cases ou trois lettres suffisent. Des
-   accesseurs, comme partout : la langue du lecteur peut changer apres le
-   chargement du module. */
+/* The same corners as initials, for the boxes where three letters are enough.
+   Accessors, as everywhere: the reader's language may change after the module
+   has loaded. */
 const SHORT_SLOTS = {
   get front_left() {
     return t("short.front_left");
@@ -916,25 +931,25 @@ const SHORT_SLOTS = {
 const km = (n) =>
   Number.isFinite(Number(n)) ? `${Math.round(Number(n)).toLocaleString(LANG)} km` : "—";
 
-/** Un nombre lisible : deux decimales au plus, et pas de zero pour rien. */
+/** A readable number: two decimals at most, and no zero for nothing. */
 const trim = (n) =>
   Number.isFinite(Number(n))
     ? Number(Number(n).toFixed(2)).toLocaleString(LANG)
     : "—";
 
-/** « 42 €/1000 km » — le chiffre qui compare deux references entre elles. */
+/** "42 €/1000 km" — the figure that compares two references against each other. */
 const cost = (set) =>
   Number.isFinite(Number(set?.cost_per_1000km))
     ? `${trim(set.cost_per_1000km)} €/1000 km`
     : null;
 
 /**
- * Depuis combien de temps un capteur se tait — « 12 min », « 5 h », « 3 j ».
+ * How long a sensor has been silent — "12 min", "5 h", "3 d".
  *
- * Le composant porte la date du dernier releve depuis toujours ; la carte ne
- * s'en servait pas, et grisait la roue sans dire de quand datait le chiffre
- * qu'elle laissait affiche. C'est pourtant la toute la difference entre une
- * pression basse et une pression d'avant-hier.
+ * The component has carried the date of the last reading all along; the card
+ * made no use of it, and greyed the wheel out without saying how old the
+ * figure it left on screen was. That is the whole difference between a low
+ * pressure and the day before yesterday's pressure.
  */
 function sinceLabel(iso) {
   if (!iso) return null;
@@ -943,24 +958,24 @@ function sinceLabel(iso) {
   const minutes = Math.max(0, Math.round((Date.now() - at.getTime()) / 60000));
   if (minutes < 60) return `${minutes} min`;
   const hours = Math.round(minutes / 60);
-  // « min » et « h » se lisent dans les deux langues ; le jour, non — « j »
-  // en francais, « d » en anglais — alors lui seul passe par le dictionnaire.
+  // "min" and "h" read the same in both languages; the day does not — "j" in
+  // French, "d" in English — so that one alone goes through the dictionary.
   return hours < 48
     ? `${hours} h`
     : `${Math.round(hours / 24)} ${t("unit.days_short")}`;
 }
 
-/** La saison d'un jeu, ou la marque « historique » qui prime dessus. */
+/** A set's season, or the "history" mark that overrides it. */
 const look = (set) => (set?.retired ? RETIRED : SEASONS[set?.season] ?? SEASONS.summer);
 
 /**
- * Le code de date, tel qu'il se lit, suivi de l'age qu'il donne.
+ * The date code, as it reads, followed by the age it gives.
  *
- * Quatre chiffres : la semaine, puis l'annee. Le code brut reste affiche parce
- * que c'est lui qu'on retrouve sur le flanc quand on verifie ; l'age l'y
- * accompagne parce qu'un pneu vieillit a l'arret et qu'aucun compteur ne le
- * voit passer. Rien de plus : le composant ne dit pas quand changer, il dit ce
- * qui est ecrit et depuis combien de temps.
+ * Four digits: the week, then the year. The raw code stays on screen because
+ * it is what one finds on the sidewall when checking; the age keeps it company
+ * because a tyre ages standing still and no counter sees it go by. Nothing
+ * more: the component does not say when to change, it says what is written and
+ * how long ago.
  */
 function dotLabel(set) {
   const parsed = /^(\d{2})(\d{2})$/.exec(String(set?.dot ?? ""));
@@ -970,8 +985,8 @@ function dotLabel(set) {
   const raw = `DOT ${set.dot}`;
   if (week < 1 || week > 53) return raw;
 
-  // Le lundi de cette semaine-la, a une poignee de jours pres : suffisant pour
-  // un age exprime en annees entieres.
+  // The Monday of that week, give or take a handful of days: enough for
+  // an age expressed in whole years.
   const made = new Date(2000 + Number(parsed[2]), 0, 1 + (week - 1) * 7);
   const years = Math.floor((Date.now() - made.getTime()) / (365.25 * 24 * 3600 * 1000));
   if (years < 0) return raw;
@@ -979,40 +994,40 @@ function dotLabel(set) {
   return `${raw} (${age})`;
 }
 
-/** `ha-icon` construit par le DOM : le nom vient de nos tables, jamais d'un etat. */
+/** An `ha-icon` built by the DOM: the name comes from our tables, never from a state. */
 function makeIcon(name) {
   const el = document.createElement("ha-icon");
   el.setAttribute("icon", name);
   return el;
 }
 
-/** Le jeu monte a une position, depuis l'attribut `fitted`. */
+/** The set fitted at a position, from the `fitted` attribute. */
 const fittedAt = (attrs, position) => attrs?.fitted?.[position] ?? null;
 
 /**
- * Combien de pneus fait ce jeu : « all » ou « pair », et rien quand on ne sait pas.
+ * How many tyres this set is: "all" or "pair", and nothing when it is unknown.
  *
- * Les entrees de `fitted` portent l'essieu, mais elles ne l'ont pas toujours
- * porte, et une carte gardee en cache par le navigateur peut parler a une
- * integration plus ancienne — c'est meme la regle le temps qu'une mise a jour
- * finisse de passer. `sets` tient la meme information et voyage dans le meme
- * attribut : la relire coute un `find`, contre un compte faux affiche avec
- * aplomb. Et faute des deux, on se tait plutot que de supposer une paire.
+ * The entries of `fitted` carry the axle, but they have not always carried it,
+ * and a card held in the browser cache may be talking to an older integration
+ * — that is even the rule while an upgrade finishes going through. `sets`
+ * holds the same information and travels in the same attribute: reading it
+ * back costs a `find`, against a wrong count displayed with confidence. And
+ * failing both, we say nothing rather than assume a pair.
  */
 const axleOf = (set, attrs) =>
   set?.axle ?? attrs?.sets?.find((other) => other.id === set?.id)?.axle ?? null;
 
-/** Les essieux qu'occupe un jeu, en cles — « front », « rear ». */
+/** The axles a set occupies, as keys — "front", "rear". */
 const axesOf = (set) =>
   (Array.isArray(set?.positions) ? set.positions : []).filter((p) => AXES.includes(p));
 
 /**
- * L'etat d'un train en une ligne, celle qui ouvre chacun de ses ecrans.
+ * A set's state in one line, the one that opens each of its screens.
  *
- * Meme phrase que celle construite en Python pour le flux — nombre de pneus,
- * kilometres, ou il se trouve. Un train doit se presenter de la meme facon
- * qu'on l'ouvre depuis la carte ou depuis Parametres, sans quoi on doute
- * d'avoir ouvert le bon.
+ * The same sentence as the one built in Python for the flow — number of tyres,
+ * kilometres, where it stands. A set has to present itself the same way whether
+ * it is opened from the card or from Settings, failing which one doubts having
+ * opened the right one.
  */
 function stateLine(set, attrs) {
   const bits = [];
@@ -1030,50 +1045,51 @@ function stateLine(set, attrs) {
   return bits.join(" · ");
 }
 
-/** Le nom d'un train, tel qu'on le lui parle. */
+/** A set's name, as one speaks to it. */
 const nameOf = (set) => set?.label || set?.reference || t("card.set_fallback");
 
-/** Un fragment en gras, pour les phrases qui annoncent une consequence. */
+/** A fragment in bold, for the sentences that announce a consequence. */
 function bold(text) {
   const el = document.createElement("b");
   el.textContent = text;
   return el;
 }
 
-/* ---------- la pastille de plan ---------- */
+/* ---------- the floor-plan badge ---------- */
 
 const BADGE_STYLE = `
   ${planBadgeStyle({ dashed: false })}
 
-  /* Deux jeux differents montes : deux lignes, une par essieu. Elire l'un des
-     deux serait un mensonge, et les concatener sur une ligne rendrait illisible
-     ce qui doit se lire de loin, sur un plan charge. */
+  /* Two different sets fitted: two lines, one per axle. Electing one of the two
+     would be a lie, and joining them on one line would make unreadable what has
+     to be read from a distance, on a busy plan. */
   .badge { flex-direction: column; align-items: stretch; gap: 2px; }
   .line { display: flex; align-items: center; gap: 4px; }
 
-  /* La saison, en couleur — la meme teinte que dans la carte, prise aux jetons
-     du theme. Le reste de la ligne reste blanc : sur un plan, c'est le nom du
-     jeu qu'on lit, et deux couleurs cote a cote se disputeraient l'oeil. La
-     forme continue de porter l'information seule, pour qui ne distingue pas
-     le bleu de l'ambre — la couleur double la lecture, elle ne la remplace pas.
+  /* The season, in colour — the same shade as in the card, taken from the
+     theme's tokens. The rest of the line stays white: on a plan, it is the
+     set's name one reads, and two colours side by side would fight over the
+     eye. The shape goes on carrying the information on its own, for whoever
+     cannot tell blue from amber — the colour doubles the reading, it does not
+     replace it.
 
-     \`filter\` plutot qu'une ombre portee : l'ombre du texte ne suit pas le
-     trace d'un SVG, et un flocon ambre sur toit clair aurait perdu le contour
-     que le reste de la pastille garde. */
+     \`filter\` rather than a drop shadow: a text shadow does not follow the
+     outline of an SVG, and an amber snowflake on a pale roof would have lost
+     the contour the rest of the badge keeps. */
   ha-icon.season {
     color: var(--tint, var(--badge-color));
     filter: drop-shadow(0 1px 3px rgba(0, 0, 0, .85));
   }
 
-  /* ---- les pressions, en option ----
+  /* ---- the pressures, optional ----
 
-     Deux colonnes, deux lignes : la voiture vue de dessus, dans le meme sens
-     que le plan. Le filet du haut separe sans encadrer — un cadre ferait une
-     seconde pastille sous la premiere, alors que c'est le meme objet.
+     Two columns, two rows: the car seen from above, the same way round as the
+     plan. The rule at the top separates without framing — a frame would make a
+     second badge under the first, when it is the same object.
 
-     Pas d'unite dans les cases. Les quatre la partagent, l'ecrire quatre fois
-     doublerait la largeur de la grille pour une information constante ; elle
-     reste dans l'infobulle de chaque roue, avec le nom du coin. */
+     No unit in the boxes. The four share it, writing it four times would double
+     the width of the grid for a constant piece of information; it stays in each
+     wheel's tooltip, with the name of the corner. */
   .tpms {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1084,31 +1100,31 @@ const BADGE_STYLE = `
     font-size: 11px;
     font-variant-numeric: tabular-nums;
   }
-  /* Chaque colonne serre vers l'axe de la voiture : les deux roues d'un meme
-     essieu se lisent en paire, et deux nombres cales a gauche se seraient lus
-     comme une liste. */
+  /* Each column tightens towards the axis of the car: the two wheels of one
+     axle read as a pair, and two numbers flushed left would have read as a
+     list. */
   .wheel { text-align: center; }
 
-  /* Un capteur muet : la pression affichee est un souvenir. Grisee plutot
-     qu'ecrite « muet » — la pastille n'a pas la place du mot, et le detail
-     attend dans l'infobulle. */
+  /* A silent sensor: the pressure shown is a memory. Greyed rather than written
+     "silent" — the badge has no room for the word, and the detail waits in the
+     tooltip. */
   .wheel.stale { opacity: .45; }
 
-  /* Un pneu appele faux — par le TPMS lui-meme ou par la consigne du train.
-     Rouge et gras : sur un plan, c'est la case qu'on doit voir de loin. Un
-     drapeau distinct du silence, qui grise : 1,4 bar demande de l'air, une
-     pile morte demande un capteur. */
+  /* A tyre called wrong — by the TPMS itself or by the set's target. Red and
+     bold: on a plan, this is the box one has to see from a distance. A flag
+     distinct from silence, which greys: 1.4 bar needs air, a dead cell needs a
+     sensor. */
   .wheel.alarm { color: #ff6b6b; font-weight: 700; }
 
-  /* L'essieu, quand il y a un choix a faire — donc jamais pour un jeu de 4. */
+  /* The axle, when there is a choice to make — so never for a set of 4. */
   .pos {
     font-size: 10px;
     font-weight: 700;
     letter-spacing: .4px;
     padding-top: 1px;
   }
-  /* La quantite : deux ou quatre pneus. Discrete, mais toujours la — c'est
-     elle qui dit si l'autre essieu porte encore autre chose. */
+  /* The quantity: two or four tyres. Discreet, but always there — it is what
+     says whether the other axle still carries something else. */
   .qty {
     font-size: 10px;
     opacity: .7;
@@ -1116,18 +1132,18 @@ const BADGE_STYLE = `
     font-variant-numeric: tabular-nums;
   }
 
-  /* Le nom du jeu. Il porte la ligne : « 12 000 km » ne dit pas lequel des
-     deux jeux d'ete les a faits, et c'est la question qu'on se pose devant un
-     plan. Coupe plutot que laisse filer — la pastille est placee au pixel sur
-     un dessin, et une reference a rallonge la ferait deborder du capot. Le
-     nom entier reste dans l'infobulle. */
+  /* The set's name. It carries the line: "12,000 km" does not say which of the
+     two summer sets ran them, and that is the question one asks in front of a
+     plan. Clipped rather than let run — the badge is placed to the pixel on a
+     drawing, and a long-winded reference would push it off the bonnet. The
+     whole name stays in the tooltip. */
   .name {
     max-width: 14ch;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
-  /* Le kilometrage passe en retrait : c'est le nom qu'on cherche d'abord. */
+  /* The mileage steps back: it is the name one looks for first. */
   .km {
     font-size: 12px;
     opacity: .8;
@@ -1135,10 +1151,10 @@ const BADGE_STYLE = `
     font-variant-numeric: tabular-nums;
   }
 
-  /* Le conseil de permutation. Un point, pas un mot : la pastille tient sur
-     un plan charge, et l'information « il serait temps » n'a pas besoin de
-     phrase pour se lire. Le detail est dans la carte. Pose au coin, il tient
-     la meme place que la pastille ait une ligne ou deux. */
+  /* The rotation advice. A dot, not a word: the badge sits on a busy plan, and
+     "it is about time" needs no sentence to be read. The detail is in the
+     card. Set in the corner, it holds the same place whether the badge has one
+     line or two. */
   .tip {
     position: absolute;
     top: -3px;
@@ -1151,10 +1167,10 @@ const BADGE_STYLE = `
   }
   .tip[hidden] { display: none; }
 
-  /* L'alarme de pression, au coin oppose du conseil : une voiture au pneu a
-     plat doit se voir sur le plan sans ouvrir le popup, meme quand la grille
-     des pressions n'est pas affichee. Rouge contre ambre — l'un dit « il
-     serait temps », l'autre dit « maintenant ». */
+  /* The pressure alarm, in the corner opposite the advice: a car with a flat
+     tyre has to be visible on the plan without opening the popup, even when
+     the pressure grid is not shown. Red against amber — one says "it is about
+     time", the other says "now". */
   .flat {
     position: absolute;
     top: -3px;
@@ -1214,7 +1230,7 @@ class FloorTyresBadge extends HTMLElement {
     });
   }
 
-  /** Le popup par defaut : la carte complete, sur la meme entite. */
+  /** The default popup: the whole card, on the same entity. */
   #fire() {
     const action = this.#config.tap_action ?? {
       action: "fire-dom-event",
@@ -1230,15 +1246,15 @@ class FloorTyresBadge extends HTMLElement {
 
   set hass(hass) {
     this.#hass = hass;
-    // Avant tout dessin : la langue du lecteur decide de chaque mot pose
-    // ensuite, et elle peut changer sans que la carte soit reconstruite.
+    // Before anything is drawn: the reader's language decides every word set
+    // down afterwards, and it can change without the card being rebuilt.
     const spoke = LANG;
     setLanguage(hass);
     if (!this.#config) return;
     const ids = [this.#config.entity];
     if (this.#config.advice_entity) ids.push(this.#config.advice_entity);
-    // Une langue qui change repeint meme sans nouvel etat : les mots poses
-    // sont ceux de l'ancienne, et aucune poussee d'entite ne viendra les laver.
+    // A language that changes repaints even without a new state: the words on
+    // screen are the old one's, and no entity push will come and wash them out.
     const changed = watch(hass, ids, this.#seen) || LANG !== spoke;
     if (!changed && this.#painted) return;
     this.#painted = true;
@@ -1255,8 +1271,8 @@ class FloorTyresBadge extends HTMLElement {
       ? this.#seen[this.#config.advice_entity]?.state === "on"
       : false;
 
-    // Une ligne par jeu reellement monte. Un jeu de 4 en fait une, deux jeux
-    // distincts en font deux, une paire seule en fait une avec son essieu.
+    // One line per set actually fitted. A set of 4 makes one, two distinct sets
+    // make two, a lone pair makes one with its axle.
     const lines = [];
     if (same) {
       lines.push({ set: front, positions: ["front", "rear"] });
@@ -1265,8 +1281,8 @@ class FloorTyresBadge extends HTMLElement {
       if (rear) lines.push({ set: rear, positions: ["rear"] });
     }
 
-    // La liste vient du composant, deja jugee : verdict du TPMS ou consigne
-    // du train, la pastille n'a rien a recalculer.
+    // The list comes from the component, already judged: the TPMS verdict or
+    // the set's target, the badge has nothing to work out again.
     const alarmed = attrs.pressure_alarm ?? [];
 
     this.#els.badge.replaceChildren(this.#els.tip, this.#els.flat);
@@ -1275,8 +1291,8 @@ class FloorTyresBadge extends HTMLElement {
     if (alarmed.length) this.#els.flat.title = t("card.alarm_title");
 
     if (!lines.length) {
-      // Rien de monte : la pastille le dit plutot que de disparaitre, sans
-      // quoi on la croirait en panne.
+      // Nothing fitted: the badge says so rather than disappear, failing which
+      // one would think it broken.
       this.#els.badge.appendChild(this.#line(null, [], attrs));
       this.#els.badge.title = t("card.none_fitted");
       this.#els.badge.setAttribute("aria-label", t("card.badge_none"));
@@ -1303,26 +1319,26 @@ class FloorTyresBadge extends HTMLElement {
   }
 
   /**
-   * Les quatre pressions, du point de vue du conducteur.
+   * The four pressures, from the driver's point of view.
    *
-   * Deux colonnes, deux lignes, dans l'ordre de `CORNERS` : avant en haut,
-   * gauche a gauche — AVG en haut a gauche, ARD en bas a droite. Ce n'est pas
-   * l'orientation du plan, qui montre la voiture depuis un autre bord, mais
-   * celle qu'on a en tete quand on parle de ses roues, et c'est aussi celle de
-   * la grille de la carte : une pastille et une carte qui se contrediraient
-   * feraient lire la pression d'une roue en regardant l'autre.
+   * Two columns, two rows, in the order of `CORNERS`: front at the top, left on
+   * the left — FL top left, RR bottom right. This is not the orientation of the
+   * plan, which shows the car from another edge, but the one held in mind when
+   * speaking of one's wheels, and it is also the card grid's: a badge and a
+   * card that contradicted each other would have one read the pressure of one
+   * wheel while looking at the other.
    *
-   * C'est cette constance qui permet de se passer d'etiquette de coin — sur
-   * une pastille de plan, « AVG » a cote de « 2,3 » doublerait la largeur pour
-   * ne rien apprendre que la position ne dise deja.
+   * It is that constancy which lets the corner labels go — on a floor-plan
+   * badge, "FL" beside "2.3" would double the width to teach nothing the
+   * position does not already say.
    *
-   * Les quatre cases sont toujours la des qu'un capteur existe : n'afficher
-   * que les coins equipes ferait glisser une roue arriere a la place d'une
-   * avant, et la disposition ne voudrait plus rien dire. Un coin sans capteur
-   * porte un tiret.
+   * The four boxes are always there as soon as one sensor exists: showing only
+   * the equipped corners would slide a rear wheel into the place of a front
+   * one, and the layout would stop meaning anything. A corner without a sensor
+   * carries a dash.
    *
-   * Rien du tout quand aucun capteur n'est attache — la pastille ne grandit
-   * pas d'un cadre vide pour un vehicule qui n'a pas de TPMS.
+   * Nothing at all when no sensor is attached — the badge does not grow an
+   * empty frame for a vehicle that has no TPMS.
    */
   #tpms(attrs) {
     const byCorner = attrs.pressures ?? {};
@@ -1343,11 +1359,11 @@ class FloorTyresBadge extends HTMLElement {
         continue;
       }
 
-      // Le silence se voit plutot qu'il ne s'ecrit : la pastille n'a pas la
-      // place du mot « muet », et une pression grisee dit assez qu'elle date.
+      // Silence is seen rather than written: the badge has no room for the word
+      // "silent", and a greyed pressure says well enough that it is old.
       if (read.stale) cell.classList.add("stale");
-      // L'alarme aussi : rouge, pas un mot. Les deux peuvent se cumuler — un
-      // capteur muet dont le dock crie encore reste un pneu a voir.
+      // The alarm too: red, not a word. The two can add up — a silent sensor
+      // whose dock is still shouting is a tyre to look at.
       if (read.alarm) cell.classList.add("alarm");
 
       cell.textContent =
@@ -1367,7 +1383,7 @@ class FloorTyresBadge extends HTMLElement {
     return grid;
   }
 
-  /** Les pressions dites a voix haute, pour l'etiquette accessible. */
+  /** The pressures said out loud, for the accessible label. */
   #spokenPressures(attrs) {
     if (!this.#config.pressures) return "";
     const byCorner = attrs.pressures ?? {};
@@ -1380,26 +1396,27 @@ class FloorTyresBadge extends HTMLElement {
     return said.length ? `${t("card.pressures_said")}${said.join(", ")}` : "";
   }
 
-  /** « avant », « arrière », rien quand le jeu couvre les quatre roues. */
+  /** "front", "rear", nothing when the set covers all four wheels. */
   #spoken(positions) {
     if (positions.length !== 1) return "";
     return `${POSITIONS[positions[0]].toLowerCase()} `;
   }
 
   /**
-   * Une ligne : l'icone de saison, l'essieu s'il y a un choix a faire, le nom
-   * du jeu, sa quantite de pneus, et son kilometrage.
+   * One line: the season icon, the axle if there is a choice to make, the set's
+   * name, its number of tyres, and its mileage.
    *
-   * L'essieu n'apparait pas pour un jeu de quatre : il n'y a rien a distinguer,
-   * et l'ecrire ferait croire que l'autre essieu porte autre chose. C'est la
-   * meme regle qu'au montage, ou on ne demande pas ou poser un jeu de quatre.
+   * The axle does not appear for a set of four: there is nothing to tell apart,
+   * and writing it would suggest the other axle carries something else. It is
+   * the same rule as at fitting, where one is not asked where to put a set of
+   * four.
    */
   #line(set, positions, attrs) {
     const el = document.createElement("div");
     el.className = "line";
 
-    // La teinte voyage par `--tint`, comme dans la carte : c'est une variable
-    // de theme, pas une couleur en dur, et elle suit donc le theme actif.
+    // The shade travels through `--tint`, as in the card: it is a theme
+    // variable, not a hard-coded colour, and so it follows the active theme.
     const mark = makeIcon(set ? look(set).icon : "mdi:car-tire-alert");
     mark.className = "season";
     if (set) mark.style.setProperty("--tint", look(set).tint);
@@ -1425,8 +1442,8 @@ class FloorTyresBadge extends HTMLElement {
     name.textContent = nameOf(set);
     el.appendChild(name);
 
-    // Meme icone que dans la carte et que dans le formulaire. Elle disait
-    // « ×4 » ici, « 4 roues » la-bas : un train doit se lire pareil partout.
+    // The same icon as in the card and in the form. It said "×4" here and
+    // "4 wheels" there: a set has to read the same way everywhere.
     const qty = axleIcon(axleOf(set, attrs));
     if (qty) el.appendChild(qty);
 
@@ -1442,19 +1459,19 @@ class FloorTyresBadge extends HTMLElement {
   }
 }
 
-/* ---------- la carte ---------- */
+/* ---------- the card ---------- */
 
 /**
- * Le voile du portail, rendu transparent.
+ * The portal's veil, made transparent.
  *
- * Un `dialog` modal pose un `::backdrop` que le navigateur assombrit. Nos
- * feuilles ont deja le leur, et le menu n'en veut aucun — deux voiles
- * superposes feraient de la carte en dessous une ombre.
+ * A modal `dialog` lays down a `::backdrop` the browser darkens. Our sheets
+ * have their own already, and the menu wants none — two veils on top of each
+ * other would turn the card underneath into a shadow.
  *
- * C'est la seule regle que ce fichier ecrit hors de ses racines d'ombre :
- * `::backdrop` appartient au document qui porte l'element, et ne s'atteint ni
- * en style en ligne ni depuis une racine d'ombre. Elle est posee une fois et
- * porte notre classe, donc ne touche rien d'autre.
+ * It is the only rule this file writes outside its shadow roots: `::backdrop`
+ * belongs to the document holding the element, and is reachable neither
+ * through inline style nor from a shadow root. It is laid down once and
+ * carries our class, so it touches nothing else.
  */
 function portalBackdrop() {
   const id = "tyres-card-portal-style";
@@ -1469,32 +1486,32 @@ const CARD_STYLE = `
   ha-card { display: block; overflow: hidden; }
   .body { padding: 0 0 14px; }
 
-  /* ---- ce qui derive de la teinte d'un jeu ----
+  /* ---- what derives from a set's shade ----
 
-     Un seul reglage vient du JavaScript : \`--tint\`. Tout le reste se calcule
-     ici, sur les memes elements — une teinte prise dans un jeton de theme
-     n'est pas une chaine a laquelle on ajoute « 22 ».
+     A single setting comes from the JavaScript: \`--tint\`. Everything else is
+     computed here, on the same elements — a shade taken from a theme token is
+     not a string one appends "22" to.
 
-     La regle porte sur les elements qui posent \`--tint\` eux-memes, et non
-     sur l'hote : une propriete personnalisee se calcule la ou elle est
-     declaree, puis s'herite en valeur. Declaree une fois en haut, elle
-     donnerait la meme teinte douce a tous les jeux.
+     The rule bears on the elements that set \`--tint\` themselves, and not on
+     the host: a custom property is computed where it is declared, then
+     inherited as a value. Declared once at the top, it would give every set
+     the same soft shade.
 
-     \`--tint-ink\` melange la teinte vers l'encre du theme : elle fonce sur
-     fond clair, s'eclaircit sur fond sombre. Une seule formule pour les deux,
-     parce que c'est le theme qui dit ou est son encre — et l'icone d'un jeu
-     d'ete cesse de faire 1,97:1 sur une carte blanche. */
+     \`--tint-ink\` mixes the shade towards the theme's ink: it darkens on a
+     light background, lightens on a dark one. One formula for both, because it
+     is the theme that says where its ink is — and a summer set's icon stops
+     sitting at 1.97:1 on a white card. */
   .hero, .row, .tid, .sheet {
     --tint-soft: color-mix(in srgb, var(--tint) 16%, transparent);
     --tint-ink: color-mix(in srgb, var(--tint) 50%, var(--primary-text-color));
   }
 
-  /* ---- l'en-tete de la carte ----
+  /* ---- the card's header ----
 
-     Le nom de la voiture, son compteur, et le seul point d'entree de ce qui
-     ne vise aucun train. 16 px et graisse moyenne, et non les 24 px d'un
-     titre de carte de Home Assistant : le protagoniste ici est le kilometrage
-     juste dessous, et un titre plus lourd que lui inverserait la lecture. */
+     The car's name, its odometer, and the only way into what aims at no set in
+     particular. 16 px and medium weight, and not the 24 px of a Home Assistant
+     card title: the protagonist here is the mileage just below, and a title
+     heavier than it would invert the reading. */
   .chead {
     display: flex;
     align-items: flex-start;
@@ -1514,7 +1531,7 @@ const CARD_STYLE = `
     color: var(--secondary-text-color);
     font-variant-numeric: tabular-nums;
   }
-  /* La cible fait 40 px, l'encre beaucoup moins : discret sans etre petit. */
+  /* The target is 40 px, the ink much less: discreet without being small. */
   .iconbtn {
     flex: 0 0 auto;
     width: 40px;
@@ -1535,15 +1552,15 @@ const CARD_STYLE = `
     color: var(--primary-text-color);
   }
 
-  /* ---- l'en-tete repond avant qu'on demande ---- */
+  /* ---- the header answers before it is asked ---- */
   .hero {
     display: flex;
     align-items: flex-start;
     gap: 14px;
     padding: 16px 16px 14px;
   }
-  /* Deux blocs des que l'avant et l'arriere different : annoncer un seul jeu
-     serait faux, et rien plus bas ne rattraperait l'erreur. */
+  /* Two blocks as soon as front and rear differ: announcing a single set
+     would be false, and nothing further down would put the mistake right. */
   .heroes {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1565,9 +1582,9 @@ const CARD_STYLE = `
     --mdc-icon-size: 24px;
   }
   .hero .txt { flex: 1; min-width: 0; }
-  /* La quantite de pneus, contre la reference qu'elle qualifie. En \`em\` : elle
-     suit le corps du texte qui la porte, donc l'echelle du theme, et tient
-     aussi bien dans un en-tete que dans une ligne de liste. */
+  /* The number of tyres, against the reference it qualifies. In \`em\`: it
+     follows the body of the text carrying it, therefore the theme's scale, and
+     sits as well in a header as in a list row. */
   .qty {
     --mdc-icon-size: 1.15em;
     width: 1.15em;
@@ -1595,17 +1612,17 @@ const CARD_STYLE = `
   .ref { margin-top: 2px; font-size: 14px; font-weight: 500; }
   .sub { margin-top: 3px; font-size: 13px; color: var(--secondary-text-color); }
 
-  /* ---- conseil de permutation ----
-     Un \`ha-alert\` : c'est le composant de Home Assistant pour ce cas, il
-     porte deja son icone, sa couleur et son contraste, et il suivra le theme
-     sans que nous ayons a le savoir. Il ne reste qu'a le placer. */
+  /* ---- rotation advice ----
+     An \`ha-alert\`: it is Home Assistant's component for this case, it carries
+     its icon, its colour and its contrast already, and it will follow the theme
+     without our having to know. All that is left is to place it. */
   .advice { display: block; margin: 0 16px 14px; }
   .advice[hidden] { display: none; }
 
-  /* ---- les pressions, dessinees comme la voiture ---- */
-  /* Deux colonnes, deux rangees : gauche a gauche, avant en haut. Une liste
-     alignee aurait demande de relire l'etiquette a chaque coin, la ou la
-     disposition la dit toute seule. */
+  /* ---- the pressures, drawn as the car is ---- */
+  /* Two columns, two rows: left on the left, front at the top. An aligned list
+     would have required rereading the label at every corner, where the layout
+     says it on its own. */
   .tpms {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -1626,10 +1643,10 @@ const CARD_STYLE = `
     letter-spacing: .5px;
     color: var(--secondary-text-color);
   }
-  /* La pression est la donnee : elle porte le corps et la graisse. */
+  /* The pressure is the datum: it carries the size and the weight. */
   .tpms .p { font-size: 16px; font-weight: 500; font-variant-numeric: tabular-nums; }
-  /* Le second membre, un seul par roue : temperature d'ordinaire, pile faible
-     ou silence quand il y en a un — voir \`#wheelAside\`. */
+  /* The second member, one per wheel only: temperature usually, low battery or
+     silence when there is one — see \`#wheelAside\`. */
   .tpms .t {
     display: inline-flex;
     align-items: center;
@@ -1641,19 +1658,19 @@ const CARD_STYLE = `
     --mdc-icon-size: 14px;
   }
   .tpms .t.alarm { color: var(--warning-color, #ffa726); }
-  /* Le rouge est reserve au pneu appele faux — par le dock ou par la
-     consigne. L'ambre dit « le capteur a un souci », le rouge « le pneu en a
-     un » : deux drapeaux, jamais un seul. */
+  /* Red is kept for the tyre called wrong — by the dock or by the target. Amber
+     says "the sensor has a problem", red says "the tyre has one": two flags,
+     never one. */
   .tpms .t.danger { color: var(--error-color, #db4437); }
   .tpms .wheel.alarm { box-shadow: inset 0 0 0 1px var(--error-color, #db4437); }
   .tpms .wheel.alarm .p { color: var(--error-color, #db4437); }
-  /* Une pile morte laisse la derniere valeur en place et ne dit rien. Le coin
-     est donc grise plutot que d'afficher une pression qui date de trois mois
-     comme si elle etait d'aujourd'hui. */
+  /* A dead cell leaves the last value in place and says nothing. The corner is
+     therefore greyed rather than showing a three-month-old pressure as though
+     it were today's. */
   .tpms .wheel.stale { opacity: .45; }
   .tpms .wheel.stale .p { font-weight: 500; }
 
-  /* ---- le parc ---- */
+  /* ---- the stock ---- */
   .label {
     display: flex;
     align-items: baseline;
@@ -1666,9 +1683,9 @@ const CARD_STYLE = `
     text-transform: uppercase;
     color: var(--secondary-text-color);
   }
-  /* Le nombre, aligne a droite comme les kilometrages des lignes qu'il
-     annonce. Il ne se dit qu'ici : l'en-tete porte le compteur, qui est ce
-     que la liste ne peut pas dire d'elle-meme. */
+  /* The count, flushed right like the mileages of the rows it introduces. It is
+     only said here: the header carries the odometer, which is what the list
+     cannot say about itself. */
   .label .count { font-variant-numeric: tabular-nums; letter-spacing: 0; }
   .row {
     display: grid;
@@ -1710,9 +1727,9 @@ const CARD_STYLE = `
     font-weight: 400;
     color: var(--secondary-text-color);
   }
-  /* Ce qui appelle une decision. La bordure et le fond portent la couleur, le
-     texte reste a l'encre du theme : une pastille se remarque par sa forme,
-     pas en peignant douze pixels de haut en orange. */
+  /* What calls for a decision. The border and the background carry the colour,
+     the text stays at the theme's ink: a chip is noticed by its shape, not by
+     painting twelve pixels of height orange. */
   .pill {
     display: inline-flex;
     align-items: center;
@@ -1734,9 +1751,9 @@ const CARD_STYLE = `
     color: var(--secondary-text-color);
   }
   .pill[title] { cursor: help; }
-  /* Comparaison, non jauge : la barre est relative au jeu le plus roule.
-     Le composant ne connait pas la duree de vie d'un pneu, la carte ne fait
-     donc pas semblant de la connaitre. */
+  /* A comparison, not a gauge: the bar is relative to the set that has run the
+     furthest. The component does not know a tyre's life, so the card does not
+     pretend to know it either. */
   .bar {
     grid-column: 2 / 4;
     height: 3px;
@@ -1750,10 +1767,10 @@ const CARD_STYLE = `
   .row.is-mounted { background: color-mix(in srgb, var(--tint) 9%, transparent); }
   .row.is-mounted .state { color: var(--primary-text-color); }
 
-  /* A l'historique. L'opacite seule ne suffisait pas a le distinguer d'un jeu
-     simplement disponible : on ajoute une hachure de fond, un liseré a gauche
-     et un etat encadre. Trois signaux qui ne dependent pas de la couleur, donc
-     lisibles aussi pour qui ne la percoit pas. */
+  /* In history. Opacity alone was not enough to tell it from a set merely
+     available: a hatched background, a rule down the left and a framed status
+     are added. Three signals that do not depend on colour, therefore readable
+     for whoever does not perceive it. */
   .row.is-retired {
     border-left: 3px solid var(--secondary-text-color);
     padding-left: 13px;
@@ -1780,12 +1797,11 @@ const CARD_STYLE = `
   }
   .row.is-retired .bar { display: none; }
 
-  /* ---- les boutons, partout ou il y en a ----
+  /* ---- the buttons, everywhere there are any ----
 
-     Aux metriques de Home Assistant : 40 px de haut, libelle de 14, icone de
-     18, forme de pilule. Ils faisaient 30 px et 12,5 px — plus petits que tout
-     bouton voisin sur le meme tableau de bord, et sous la cible tactile
-     minimale. */
+     To Home Assistant's metrics: 40 px tall, 14 px label, 18 px icon, pill
+     shape. They were 30 px and 12.5 px — smaller than any neighbouring button
+     on the same dashboard, and under the minimum touch target. */
   .act {
     display: inline-flex;
     align-items: center;
@@ -1813,13 +1829,13 @@ const CARD_STYLE = `
     color: var(--error-color);
     border-color: color-mix(in srgb, var(--error-color) 40%, transparent);
   }
-  /* Un geste que la saisie ne permet pas encore. Il reste lisible : c'est le
-     bouton qu'on cherche, et l'effacer ferait croire qu'il n'existe pas. */
+  /* A gesture the input does not allow yet. It stays readable: it is the button
+     one is looking for, and erasing it would suggest it does not exist. */
   .act[disabled] { opacity: .45; cursor: default; }
   .act[disabled]:hover { border-color: var(--divider-color); }
-  /* ---- le geste d'une carte encore vide ----
-     Le seul endroit ou un bouton reste sur la carte : une carte vide est faite
-     pour etre remplie, et le menu seul se chercherait. */
+  /* ---- the gesture of a card that is still empty ----
+     The only place where a button stays on the card: an empty card is made to
+     be filled, and the menu on its own would have to be hunted for. */
   .links {
     display: flex;
     flex-wrap: wrap;
@@ -1827,12 +1843,12 @@ const CARD_STYLE = `
     margin: 4px 16px 4px;
   }
 
-  /* ---- le menu de la carte ----
+  /* ---- the card's menu ----
 
-     Peint dans le portail, en position fixe, place au pixel sous son bouton.
-     La couche transparente en dessous capte le clic qui referme : sans elle,
-     il faudrait ecouter le document entier et deviner ce qui appartient au
-     menu a travers deux frontieres de shadow DOM. */
+     Painted in the portal, fixed, placed to the pixel under its button. The
+     transparent layer underneath catches the click that closes it: without it,
+     one would have to listen to the whole document and guess what belongs to
+     the menu across two shadow DOM boundaries. */
   .menu-layer { position: fixed; inset: 0; z-index: 8; }
   .cardmenu {
     position: fixed;
@@ -1865,19 +1881,19 @@ const CARD_STYLE = `
   .cardmenu .mi:hover:not([disabled]) {
     background: color-mix(in srgb, var(--primary-text-color) 7%, transparent);
   }
-  /* Une ligne qui ne s'ouvre sur rien : le compteur nourri par un capteur. Elle
-     informe, donc elle reste lisible — un demi-ton la ferait passer pour une
-     option qu'on aurait le droit d'activer. */
+  /* A row that opens onto nothing: the odometer fed by a sensor. It informs, so
+     it stays readable — a half tone would make it look like an option one is
+     entitled to switch on. */
   .cardmenu .mi[disabled] { cursor: default; }
   .cardmenu .msep { height: 1px; margin: 7px 0; background: var(--divider-color); }
 
-  /* ---- la feuille d'un train ----
+  /* ---- a set's sheet ----
 
-     Les actions vivaient dans la ligne, ou la place manquait : tout tenait sur
-     un rang, et ce qui n'y tenait pas partait sous « … ». Ici elles ont la
-     largeur d'une feuille, ce qui permet de les nommer et de les grouper par
-     ce qu'elles touchent — la fiche, les capteurs, le compte — au lieu de les
-     aligner par ordre d'arrivee. */
+     The actions used to live in the row, where there was no room: everything
+     had to fit on one rank, and what did not went under "…". Here they have
+     the width of a sheet, which allows naming them and grouping them by what
+     they touch — the record, the sensors, the count — instead of lining them
+     up in order of arrival. */
   .tid { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
   .tid .mark {
     flex: 0 0 auto;
@@ -1902,10 +1918,9 @@ const CARD_STYLE = `
 
   .verbs { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 4px; }
 
-  /* Un bloc par chose qu'on peut vouloir changer, et un seul verbe par bloc.
-     Le corps dit ce que le bloc contient aujourd'hui : sans cela le verbe
-     ouvrirait un formulaire pour repondre a une question qu'on ne s'est pas
-     encore posee. */
+  /* One block per thing one may want to change, and one verb per block. The
+     body says what the block holds today: without it the verb would open a
+     form to answer a question one has not yet asked. */
   .tblock {
     margin-top: 14px;
     padding-top: 12px;
@@ -1933,8 +1948,9 @@ const CARD_STYLE = `
   .tblock .bd b { color: var(--primary-text-color); font-weight: 500; }
   .tblock .bd.none { font-style: italic; opacity: .8; }
 
-  /* Le lien d'un bloc : un verbe, sans cadre. Un bouton par bloc ferait quatre
-     boutons de meme poids que « Monter », qui est le geste du jour. */
+  /* A block's link: a verb, without a frame. One button per block would make
+     four buttons of the same weight as "Fit", which is the gesture of the
+     day. */
   .lnk {
     border: none;
     background: none;
@@ -1949,8 +1965,8 @@ const CARD_STYLE = `
   .lnk:hover { text-decoration: underline; }
   .lnk:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
 
-  /* Le rare et le conséquent, en fin de feuille : lisible, mais sans le relief
-     d'un bouton — on ne s'y appuie pas par megarde. */
+  /* The rare and the consequential, at the end of the sheet: readable, but
+     without a button's relief — one does not lean on it by accident. */
   .tmore {
     display: flex;
     flex-wrap: wrap;
@@ -1962,8 +1978,8 @@ const CARD_STYLE = `
   .tmore .lnk { font-weight: 500; color: var(--secondary-text-color); }
   .tmore .lnk.danger { color: var(--error-color); }
 
-  /* L'encart de confirmation. Il prend la place des verbes plutot que de
-     s'ouvrir par-dessus : le geste se confirme la ou il a ete demande. */
+  /* The confirmation inset. It takes the place of the verbs rather than opening
+     over them: a gesture is confirmed where it was asked for. */
   .confirm {
     margin: 14px 0 4px;
     padding: 12px;
@@ -1991,17 +2007,17 @@ const CARD_STYLE = `
   }
   .confirm .acts { display: flex; flex-wrap: wrap; gap: 8px; }
 
-  /* ---- les feuilles ----
+  /* ---- the sheets ----
 
-     Une seule pile, un seul voile. La fiche d'un train, l'ecran qui la
-     modifie et le formulaire qui la remplit s'empilent au lieu de se
-     remplacer : on revient d'ou l'on vient, et « Annuler » ne renvoie plus a
-     la carte deux niveaux plus bas, en ayant perdu le train qu'on regardait.
+     One stack, one veil. A set's record, the screen that edits it and the form
+     that fills it in are stacked instead of replacing one another: one comes
+     back from where one came, and "Cancel" no longer returns to the card two
+     levels below, having lost the set one was looking at.
 
-     Le voile est peint dans un hote pose en fin de \`body\`, hors de la carte
-     — voir \`#openPortal\`. C'est ce qui rend le \`position: fixed\` ci-dessous
-     fiable : dans la carte, le moindre \`transform\` sur un ancetre en faisait
-     un positionnement relatif a la carte elle-meme. */
+     The veil is painted in a host placed at the end of \`body\`, outside the
+     card — see \`#openPortal\`. That is what makes the \`position: fixed\` below
+     reliable: inside the card, the slightest \`transform\` on an ancestor turned
+     it into positioning relative to the card itself. */
   .scrim {
     position: fixed;
     inset: 0;
@@ -2021,16 +2037,16 @@ const CARD_STYLE = `
     background: var(--ha-card-background, var(--card-background-color));
     color: var(--primary-text-color);
     box-shadow: 0 12px 40px rgba(0, 0, 0, .35);
-    /* Une feuille qui ne parle d'aucun train prend la teinte de l'interface :
-       les pastilles de choix s'y accordent sans avoir a s'en soucier. */
+    /* A sheet that speaks of no set takes the interface's shade: the choice
+       chips fall in with it without having to bother. */
     --tint: var(--primary-color);
   }
   .sheet:focus-visible { outline: none; }
   .sheet h2 { margin: 0; font-size: 17px; font-weight: 500; }
 
-  /* L'en-tete. Le chevron n'apparait qu'a partir du deuxieme etage : au
-     premier il n'y a rien derriere, et un retour qui referme se lirait comme
-     une annulation deguisee. */
+  /* The header. The chevron only appears from the second floor up: on the
+     first there is nothing behind, and a back arrow that closes would read as a
+     cancel in disguise. */
   .shead { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
   .shead .tid { flex: 1; min-width: 0; margin-bottom: 0; }
   .shead h2 { flex: 1; min-width: 0; }
@@ -2057,8 +2073,8 @@ const CARD_STYLE = `
     line-height: 1.45;
     color: var(--secondary-text-color);
   }
-  /* Les paragraphes du flux, rendus un a un : \`pre-wrap\` sur le bloc entier
-     rendait les sauts de ligne du markdown en blancs verticaux doubles. */
+  /* The flow's paragraphs, rendered one by one: \`pre-wrap\` on the whole block
+     turned the markdown's line breaks into doubled vertical gaps. */
   .sheet .desc p { margin: 0 0 8px; }
   .sheet .desc p:last-child { margin-bottom: 0; }
   .sheet .desc ul { margin: 0 0 8px; padding-left: 18px; }
@@ -2077,18 +2093,18 @@ const CARD_STYLE = `
   .sheet .menu { display: flex; flex-direction: column; gap: 8px; }
   .sheet .menu .act { justify-content: flex-start; height: 40px; border-radius: 12px; }
   .sheet-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
-  /* Un pied de formulaire porte le geste : plus haut que les pilules d'une
-     ligne de liste, qui, elles, doivent s'effacer. */
+  /* A form's footer carries the gesture: taller than the pills of a list row,
+     which have to efface themselves. */
   .sheet-foot .act { height: 36px; padding: 0 16px; }
   .act[disabled] { opacity: .5; cursor: default; }
 
-  /* ---- les champs ----
+  /* ---- the fields ----
 
-     Le nom au-dessus, l'aide en dessous, et l'aide seulement quand elle
-     apprend quelque chose. Le flux en ecrit une sous chacun de ses neuf
-     champs — c'est juste dans une page de reglages qu'on lit une fois, mais
-     ici cela noie les trois qui en avaient besoin. Les autres passent en
-     exemple dans la boite, la ou l'oeil est deja. */
+     The name above, the help below, and the help only when it teaches
+     something. The flow writes one under each of its nine fields — which is
+     right in a settings page read once, but here it drowns the three that
+     needed it. The others move into the box as an example, where the eye
+     already is. */
   .fset { display: flex; flex-direction: column; gap: 15px; }
   .fld2 .lb {
     display: block;
@@ -2126,19 +2142,19 @@ const CARD_STYLE = `
   .tx::placeholder { color: var(--secondary-text-color); opacity: .5; }
   .tx:focus { border-color: var(--primary-color); }
   input.tx[type="number"] { font-variant-numeric: tabular-nums; }
-  /* Un nombre porte son unite a droite, hors de la boite : dedans, elle se
-     ferait effacer par la premiere frappe. */
+  /* A number carries its unit on the right, outside the box: inside, it would
+     be wiped out by the first keystroke. */
   .unit { display: flex; align-items: center; gap: 9px; }
   .unit .tx { flex: 1; min-width: 0; text-align: right; }
   .unit .u { flex: 0 0 auto; font-size: 13px; font-weight: 500; color: var(--secondary-text-color); }
 
-  /* ---- les bonds d'un compteur ----
+  /* ---- an odometer's leaps ----
 
-     Un compteur ne se corrige pas d'un kilometre, il se releve de plusieurs
-     centaines. Les fleches du champ avancent d'un pas a la fois, ce qui est
-     juste pour un ajustement et absurde pour un releve : ces boutons donnent
-     les bonds qu'on fait vraiment, et le champ reste libre pour la valeur
-     exacte lue au tableau de bord. */
+     An odometer is not corrected by a kilometre, it is read off several
+     hundred at a time. The field's arrows advance one step at a time, which is
+     right for an adjustment and absurd for a reading: these buttons give the
+     leaps one actually makes, and the field stays free for the exact figure
+     read off the dashboard. */
   .quick { display: flex; gap: 7px; margin-top: 9px; }
   .quick .qk {
     flex: 1 1 0;
@@ -2156,13 +2172,13 @@ const CARD_STYLE = `
   }
   .quick .qk:hover { border-color: var(--primary-color); }
 
-  /* ---- le choix, en pastilles ----
+  /* ---- choice, as chips ----
 
-     Trois saisons, deux quantites, deux essieux : des listes de deux ou trois
-     entrees, toutes visibles. La pastille porte l'icone et la teinte que ce
-     meme choix aura partout ailleurs sur la carte — sur la pastille de plan,
-     dans la liste, dans l'en-tete. C'est la que le formulaire cesse d'etre un
-     formulaire : on ne lit pas « hiver », on reconnait le flocon bleu. */
+     Three seasons, two quantities, two axles: lists of two or three entries,
+     all visible. The chip carries the icon and the shade that same choice will
+     have everywhere else on the card — on the floor-plan badge, in the list, in
+     the header. That is where the form stops being a form: one does not read
+     "winter", one recognises the blue snowflake. */
   .seg { display: flex; gap: 7px; }
   .seg .opt {
     flex: 1 1 0;
@@ -2188,19 +2204,19 @@ const CARD_STYLE = `
   }
   .seg .opt .sub { font-size: 12px; font-weight: 500; color: var(--secondary-text-color); }
   .seg .opt:hover { border-color: var(--pick, var(--tint)); }
-  /* Le choix retenu ne tient pas qu'a la couleur : le double liseré le donne
-     aussi a qui ne distingue pas le bleu du vert. */
+  /* The chosen option does not hang on colour alone: the double rule gives it
+     as well to whoever cannot tell blue from green. */
   .seg .opt[aria-pressed="true"] {
     border-color: var(--pick, var(--tint));
     box-shadow: inset 0 0 0 1px var(--pick, var(--tint));
     background: color-mix(in srgb, var(--pick, var(--tint)) 13%, transparent);
-    /* Le liseré porte la teinte pleine, le texte non : sur un fond a 13 % de
-       la meme couleur, l'ambre du jeu d'ete ne se lirait pas. */
+    /* The rule carries the full shade, the text does not: on a background at
+       13 % of the same colour, the summer set's amber would not read. */
     color: color-mix(in srgb, var(--pick, var(--tint)) 50%, var(--primary-text-color));
   }
   .seg .opt[aria-pressed="true"] .sub { color: inherit; opacity: .8; }
 
-  /* ---- les groupes ---- */
+  /* ---- the groups ---- */
   .grp + .grp { margin-top: 16px; padding-top: 15px; border-top: 1px solid var(--divider-color); }
   .grp .gt {
     margin-bottom: 12px;
@@ -2211,9 +2227,9 @@ const CARD_STYLE = `
     color: var(--secondary-text-color);
   }
   .grp .gd { margin: -7px 0 12px; font-size: 12px; line-height: 1.45; color: var(--secondary-text-color); }
-  /* Un groupe qui defait quelque chose ailleurs. Il ne se cache pas dans un
-     pli et ne se confond pas avec le reste du formulaire : ce qu'on y repond
-     depose un train. */
+  /* A group that undoes something elsewhere. It does not hide in a fold and is
+     not confused with the rest of the form: what one answers there takes a set
+     off the car. */
   .grp.warn {
     margin-top: 16px;
     padding: 13px;
@@ -2222,10 +2238,10 @@ const CARD_STYLE = `
     background: rgba(255, 167, 38, .10);
   }
 
-  /* ---- ce qu'on ne remplit pas toujours ----
-     Cinq champs facultatifs sur neuf. Les montrer d'entree fait un mur ou
-     rien ne se detache ; les cacher les rendrait introuvables. Un pli, donc,
-     qui dit ce qu'il contient plutot que « Options ». */
+  /* ---- what is not always filled in ----
+     Five optional fields out of nine. Showing them from the start makes a wall
+     where nothing stands out; hiding them would make them unfindable. A fold,
+     then, which says what it holds rather than "Options". */
   .fold { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--divider-color); }
   .fold > summary {
     display: flex;
@@ -2242,12 +2258,12 @@ const CARD_STYLE = `
   .fold[open] > summary ha-icon { transform: rotate(90deg); }
   .fold .fset { margin-top: 15px; }
 
-  /* ---- le plan de la voiture ----
+  /* ---- the plan of the car ----
 
-     Les capteurs s'attachent la ou les pressions se lisent : meme grille,
-     meme ordre, avant en haut. La liste « Avant gauche / Avant droit / … »
-     demandait de relire l'etiquette a chaque ligne pour savoir de quelle roue
-     on parlait, alors que la disposition le dit toute seule. */
+     The sensors are attached where the pressures are read: same grid, same
+     order, front at the top. The list "Front left / Front right / …" required
+     rereading the label at every row to know which wheel was meant, when the
+     layout says it on its own. */
   .car {
     position: relative;
     margin-top: 8px;
@@ -2256,7 +2272,7 @@ const CARD_STYLE = `
     border-radius: 16px;
   }
   .car::before {
-    /* Le mot vient de l'element : un contenu CSS fige ne parle qu'une langue. */
+    /* The word comes from the element: a frozen CSS content speaks one language. */
     content: attr(data-front);
     position: absolute;
     top: -7px;
@@ -2278,7 +2294,7 @@ const CARD_STYLE = `
     color: var(--secondary-text-color);
   }
   .car ha-selector { display: block; }
-  /* Un essieu entier, quand c'est lui qu'on designe et non une roue. */
+  /* A whole axle, when it is the axle that is meant and not a wheel. */
   .car .half {
     grid-column: 1 / -1;
     display: flex;
@@ -2305,9 +2321,9 @@ const CARD_STYLE = `
   }
   .car .half[aria-pressed="true"] ha-icon { color: var(--tint-ink); }
 
-  /* ---- deux relevés qui se contredisent ----
-     Les deux chiffres cote a cote : c'est leur ecart qui fait la decision, et
-     une case a cocher ne le montre pas. */
+  /* ---- two readings that contradict each other ----
+     The two figures side by side: it is the gap between them that makes the
+     decision, and a checkbox does not show it. */
   .versus { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 2px 0 14px; }
   .versus .fig { padding: 12px; border-radius: 12px; background: var(--secondary-background-color); }
   .versus .fig .k {
@@ -2331,25 +2347,26 @@ const CARD_STYLE = `
 
   .empty { padding: 4px 16px 12px; font-size: 13px; color: var(--secondary-text-color); }
 
-  /* ---- quand la colonne se resserre ----
+  /* ---- when the column tightens ----
 
-     Une carte se pose sur 1 a 12 colonnes dans une vue « sections ». Sa
-     largeur n'a donc aucun rapport avec celle de la fenetre, et une requete
-     de media mesurerait la mauvaise chose : c'est la carte qui se mesure.
+     A card sits on 1 to 12 columns in a "sections" view. Its width therefore
+     has nothing to do with the window's, and a media query would measure the
+     wrong thing: it is the card that measures itself.
 
-     En dessous de 340 px, les grilles a deux colonnes n'ont plus la place de
-     l'etre — deux en-tetes de 27 px cote a cote se partageaient une centaine
-     de pixels chacun. Elles se deplient, et le kilometrage d'une ligne passe
-     sous son nom au lieu de lutter pour la meme rangee. */
-  /* \`container-type\` pose aussi \`contain: layout\`, ce qui fait de la carte un
-     bloc conteneur pour tout descendant en position fixe. La feuille aurait
-     donc ete rognee ici meme — elle ne l'est pas, parce qu'elle a d'abord
-     demenage dans le portail. C'est ce demenagement qui rend cette ligne
-     possible, et non l'inverse. */
+     Under 340 px, the two-column grids no longer have the room to be two — two
+     27 px headers side by side were sharing a hundred pixels each. They unfold,
+     and a row's mileage moves under its name instead of fighting for the same
+     rank. */
+  /* \`container-type\` also sets \`contain: layout\`, which makes the card a
+     containing block for any fixed-position descendant. The sheet would
+     therefore have been clipped right here — it is not, because it moved into
+     the portal first. That move is what makes this line possible, and not the
+     other way round. */
   ha-card { container-type: inline-size; }
   @container (max-width: 340px) {
-    /* Le filet entre les deux en-tetes vient du \`gap\` sur fond de \`.heroes\` :
-       il suit le pli tout seul, en horizontal comme en vertical. */
+    /* The rule between the two headers comes from the \`gap\` over the \`.heroes\`
+       background: it follows the fold on its own, horizontally as well as
+       vertically. */
     .heroes { grid-template-columns: 1fr; }
     .tpms { grid-template-columns: 1fr; }
     .km { font-size: 22px; }
@@ -2376,12 +2393,12 @@ const CARD_STYLE = `
   @media (prefers-reduced-motion: reduce) { .row { transition: none; } }
 `;
 
-/* ---------- le flux, conduit sans etre montre ---------- */
+/* ---------- the flow, driven without being shown ---------- */
 
-/** Le chemin REST du flux d'options : celui du bouton « Configurer ». */
+/** The REST path of the options flow: the one behind the "Configure" button. */
 const FLOW_PATH = "config/config_entries/options/flow";
 
-/** Un mot dans le bandeau de HA : c'est la que l'interface met deja ses accuses. */
+/** A word in HA's toast: that is where the interface already puts its acknowledgements. */
 function notify(el, message) {
   el.dispatchEvent(
     new CustomEvent("hass-notification", { detail: { message }, bubbles: true, composed: true })
@@ -2389,17 +2406,17 @@ function notify(el, message) {
 }
 
 /**
- * Rend `ha-form` et `ha-selector` disponibles hors editeur.
+ * Makes `ha-form` and `ha-selector` available outside an editor.
  *
- * Les composants existent dans le frontend, mais leur morceau de code n'est
- * charge que lorsqu'une carte ouvre son editeur. On demande donc a HA de
- * fabriquer l'editeur d'une carte du coeur, ce qui les tire avec lui. Sans
- * cela, `document.createElement("ha-selector")` rendrait une boite vide.
+ * The components exist in the frontend, but their chunk is only loaded when a
+ * card opens its editor. So we ask HA to build the editor of a core card,
+ * which pulls them along. Without this, `document.createElement("ha-selector")`
+ * would render an empty box.
  *
- * `ha-selector` est le seul controle de HA que la carte garde : choisir une
- * entite parmi deux mille demande une recherche, un filtre par domaine et un
- * apercu de l'etat. Le reconstruire serait le refaire moins bien, et l'usager
- * le connait deja — c'est le meme selecteur que partout ailleurs chez lui.
+ * `ha-selector` is the only HA control the card keeps: picking one entity out
+ * of two thousand calls for a search, a filter by domain and a preview of the
+ * state. Rebuilding it would be doing it again, worse, and the user knows it
+ * already — it is the same picker as everywhere else in their house.
  */
 let formLoading = null;
 function loadHaForm() {
@@ -2415,11 +2432,11 @@ function loadHaForm() {
 }
 
 /**
- * Les valeurs de depart d'un formulaire de flux.
+ * A flow form's starting values.
  *
- * Le schema les porte deja : `default` pour ce que le flux impose,
- * `description.suggested_value` pour ce qu'il propose. `ha-form` n'invente
- * rien de lui-meme, c'est a l'appelant de lui remettre cet etat initial.
+ * The schema carries them already: `default` for what the flow imposes,
+ * `description.suggested_value` for what it proposes. `ha-form` invents
+ * nothing on its own, it is up to the caller to hand it that initial state.
  */
 function initialFlowData(schema) {
   const data = {};
@@ -2432,21 +2449,21 @@ function initialFlowData(schema) {
 }
 
 /**
- * Le markdown des descriptions du flux, rendu dans un element donne.
+ * The markdown of the flow's descriptions, rendered into a given element.
  *
- * Le dialogue natif de Home Assistant passe ces textes a `ha-markdown` : ce
- * qu'ils contiennent est donc du markdown, et l'afficher en `textContent`
- * montrerait les etoiles et les tirets. On n'en rend que ce que le flux
- * emploie — paragraphes, listes a puces, gras — parce qu'un moteur complet
- * pour trois marques serait une dependance de plus a suivre.
+ * Home Assistant's native dialog passes these texts to `ha-markdown`: what
+ * they hold is therefore markdown, and showing it as `textContent` would
+ * display the asterisks and the dashes. Only what the flow actually uses is
+ * rendered — paragraphs, bullet lists, bold — because a complete engine for
+ * three marks would be one more dependency to follow.
  *
- * Tout passe par des noeuds de texte : rien de ce qui vient du flux n'est
- * jamais interprete comme du balisage, meme si une reference de pneu se met
- * un jour a contenir des chevrons.
+ * Everything goes through text nodes: nothing coming from the flow is ever
+ * interpreted as markup, even if a tyre reference one day comes to contain
+ * angle brackets.
  */
 function renderMarkdown(source, into) {
   const bold = (text, parent) => {
-    // Les segments impairs sont ceux entre deux paires d'etoiles.
+    // The odd segments are the ones between two pairs of asterisks.
     text.split(/\*\*/).forEach((part, i) => {
       if (!part) return;
       if (i % 2) {
@@ -2480,7 +2497,7 @@ function renderMarkdown(source, into) {
   }
 }
 
-/** Ce qu'un appel REST rate a dire de lui-meme. */
+/** What a REST call fails to say about itself. */
 function flowError(err) {
   if (!err) return t("card.unknown_error");
   if (typeof err === "string") return err;
@@ -2488,27 +2505,27 @@ function flowError(err) {
 }
 
 /**
- * Le flux d'options du vehicule, conduit par la carte — et jamais montre.
+ * The vehicle's options flow, driven by the card — and never shown.
  *
- * Home Assistant expose en REST le meme flux que la page de l'integration
- * ouvre en dialogue : `POST config/config_entries/options/flow` avec
- * l'`entry_id` du vehicule. La carte le conduit donc elle-meme, mais elle
- * n'en affiche pas les ecrans : elle lit le schema d'un pas pour savoir quoi
- * demander et avec quelles valeurs de depart, dessine ses propres champs, et
- * reposte ce qui a ete saisi sous les memes noms.
+ * Home Assistant exposes over REST the same flow the integration page opens as
+ * a dialog: `POST config/config_entries/options/flow` with the vehicle's
+ * `entry_id`. The card therefore drives it itself, but shows none of its
+ * screens: it reads a step's schema to know what to ask and with what starting
+ * values, draws its own fields, and posts what was entered back under the same
+ * names.
  *
- * Ce qu'on y gagne est la coherence — un formulaire de la carte ressemble a
- * la carte. Ce qu'on ne perd pas est la regle : ce qu'un code DOT peut valoir,
- * ce qu'un essieu deja occupe interdit, ce qu'un compteur qui recule impose,
- * tout cela reste ecrit une seule fois, en Python, et sert aussi bien
- * Parametres que la carte. Une erreur revient par `errors`, a un nom de champ,
- * et se pose sous le bon champ sans que la carte sache ce qu'elle raconte.
+ * What is gained is coherence — a card's form looks like the card. What is not
+ * lost is the rule: what a DOT code may be worth, what an occupied axle
+ * forbids, what an odometer going backwards imposes, all of it stays written
+ * once, in Python, and serves Settings as well as the card. An error comes back
+ * through `errors`, against a field name, and lands under the right field
+ * without the card knowing what it says.
  *
- * `path` enchaine sans les afficher les pas qui menent la ou l'on voulait
- * aller : le menu du flux, puis le choix du train. Trois ecrans traverses pour
- * arriver a « modifier la fiche », ce qui a du sens depuis Parametres — on y
- * arrive sans savoir ce qu'on cherche — et aucun depuis une ligne de la carte,
- * ou le train a deja ete designe du doigt.
+ * `path` walks through, without showing them, the steps that lead where one
+ * wanted to go: the flow's menu, then the choice of set. Three screens crossed
+ * to reach "edit the record", which makes sense from Settings — one arrives
+ * there without knowing what one is after — and none at all from a row of the
+ * card, where the set has already been pointed at.
  */
 class Flow {
   #hass;
@@ -2533,21 +2550,21 @@ class Flow {
     return this.#step;
   }
 
-  /** Une cle de traduction du flux, la ou le dialogue natif la lit. */
+  /** A translation key of the flow, where the native dialog reads it. */
   t(key, placeholders) {
     return this.#hass?.localize?.(`component.${DOMAIN}.options.${key}`, placeholders);
   }
 
-  /** Une option de liste : elles vivent sous `selector`, hors de l'arbre du flux. */
+  /** A list option: they live under `selector`, outside the flow's tree. */
   option(key) {
     return this.#hass?.localize?.(`component.${DOMAIN}.selector.${key}`);
   }
 
-  /** Ouvre le flux et descend jusqu'au pas vise. */
+  /** Opens the flow and walks down to the step aimed at. */
   async open(path = []) {
     await loadHaForm();
-    // Les libelles du flux vivent du cote serveur : sans ce chargement, les
-    // cles s'afficheraient telles quelles.
+    // The flow's labels live on the server side: without this load, the keys
+    // would be displayed as they are.
     await Promise.all([
       this.#hass.loadBackendTranslation?.("options", DOMAIN),
       this.#hass.loadBackendTranslation?.("selector", DOMAIN),
@@ -2575,9 +2592,9 @@ class Flow {
   }
 
   /**
-   * Le mot de la fin. Un abandon en porte un — « Train monté », « Ce train
-   * n'existe plus » — et c'est celui du flux qu'on repete, pas un nouveau :
-   * deux facons de dire la meme chose finissent par ne plus dire la meme.
+   * The last word. An abort carries one — "Set fitted", "That set no longer
+   * exists" — and it is the flow's that is repeated, not a new one: two ways
+   * of saying the same thing end up no longer saying the same.
    */
   get outcome() {
     if (this.#step?.type === "abort") {
@@ -2590,8 +2607,8 @@ class Flow {
   }
 
   /**
-   * Abandonne. Un flux laisse ouvert le reste pour tout le monde et
-   * ressortirait au rechargement de la page.
+   * Gives up. A flow left open stays open for everybody and would surface
+   * again when the page is reloaded.
    */
   cancel() {
     const id = this.#id;
@@ -2600,9 +2617,9 @@ class Flow {
   }
 }
 
-/* ---------- les controles de saisie ---------- */
+/* ---------- the input controls ---------- */
 
-/** Le cadre d'un champ : son nom au-dessus, son aide ou son refus en dessous. */
+/** A field's frame: its name above, its help or its refusal below. */
 function frame({ label, optional, helper, error }, control) {
   const el = document.createElement("div");
   el.className = "fld2" + (error ? " wrong" : "");
@@ -2618,10 +2635,10 @@ function frame({ label, optional, helper, error }, control) {
       lb.appendChild(tag);
     }
     el.appendChild(lb);
-    // Le nom pointe le controle plutot que de l'envelopper : `ha-selector` est
-    // un composant a lui, et un clic sur son etiquette doit ouvrir sa liste.
-    // `aria-labelledby` double le lien pour ce qui n'est pas un champ au sens
-    // du HTML — un groupe de pastilles, que `for` ne sait pas designer.
+    // The name points at the control rather than wrapping it: `ha-selector` is
+    // a component of its own, and a click on its label must open its list.
+    // `aria-labelledby` doubles the link for what is not a field in the HTML
+    // sense — a group of chips, which `for` cannot designate.
     const id = `f-${Math.random().toString(36).slice(2, 9)}`;
     control.id = id;
     lb.htmlFor = id;
@@ -2645,7 +2662,7 @@ function frame({ label, optional, helper, error }, control) {
   return el;
 }
 
-/** Une boite de texte. */
+/** A text box. */
 function textControl(value, { placeholder, onInput }) {
   const el = document.createElement("input");
   el.type = "text";
@@ -2657,13 +2674,12 @@ function textControl(value, { placeholder, onInput }) {
 }
 
 /**
- * Un nombre et son unite.
+ * A number and its unit.
  *
- * Le pas des fleches vient du champ decrit, et non du navigateur : un
- * kilometrage se releve par centaines quand une pression se regle par
- * dixiemes, et le pas de un que suppose le navigateur ne convient qu'a la
- * seconde. Sans `step`, ce pas de un reste — c'est le bon defaut pour tout ce
- * qui se compte petit.
+ * The arrows' step comes from the field described, and not from the browser: a
+ * mileage is read off by hundreds where a pressure is set by tenths, and the
+ * step of one the browser assumes only suits the second. Without `step`, that
+ * step of one remains — it is the right default for everything counted small.
  */
 function numberControl(value, { unit, step, onInput }) {
   const el = document.createElement("div");
@@ -2682,7 +2698,7 @@ function numberControl(value, { unit, step, onInput }) {
     u.textContent = unit;
     el.appendChild(u);
   }
-  // Le cadre pointe le champ, pas la boite qui le contient.
+  // The frame points at the field, not at the box containing it.
   Object.defineProperty(el, "id", {
     set: (id) => input.setAttribute("id", id),
     get: () => input.getAttribute("id"),
@@ -2691,21 +2707,21 @@ function numberControl(value, { unit, step, onInput }) {
 }
 
 /**
- * Un choix en pastilles.
+ * A choice as chips.
  *
- * Deux ou trois options, toutes visibles, chacune portant l'icone et la
- * teinte qu'elle aura partout ailleurs sur la carte. Un `radiogroup` et non
- * une suite de boutons : les fleches y naviguent, ce qu'une liste de boutons
- * ne fait pas, et un lecteur d'ecran annonce « 2 sur 3 ».
+ * Two or three options, all visible, each carrying the icon and the shade it
+ * will have everywhere else on the card. A `radiogroup` and not a row of
+ * buttons: the arrow keys navigate it, which a list of buttons does not do, and
+ * a screen reader announces "2 of 3".
  */
 function choiceControl(value, { options, onPick }) {
   const el = document.createElement("div");
   el.className = "seg";
   el.setAttribute("role", "radiogroup");
 
-  // Les pastilles se marquent elles-memes avant de prevenir l'appelant : la
-  // plupart des choix ne repeignent pas la feuille, et sans cela un clic sur
-  // « Hiver » changeait la valeur sans que rien a l'ecran ne le dise.
+  // The chips mark themselves before warning the caller: most choices do not
+  // repaint the sheet, and without this a click on "Winter" changed the value
+  // without anything on screen saying so.
   const buttons = [];
   const select = (picked, focus) => {
     buttons.forEach((button, i) => {
@@ -2747,9 +2763,9 @@ function choiceControl(value, { options, onPick }) {
       if (!step) return;
       event.preventDefault();
       const next = options[(index + step + options.length) % options.length];
-      // Le focus suit la valeur : les fleches d'un radiogroup deplacent les
-      // deux ensemble, et un focus reste sur l'ancienne pastille se perdrait
-      // a la frappe suivante.
+      // Focus follows the value: a radiogroup's arrow keys move the two
+      // together, and a focus left on the old chip would get lost at the
+      // next keystroke.
       select(next.value, true);
     });
     buttons.push(button);
@@ -2758,7 +2774,7 @@ function choiceControl(value, { options, onPick }) {
   return el;
 }
 
-/** Le selecteur d'entite de Home Assistant, dans le cadre de la carte. */
+/** Home Assistant's entity picker, inside the card's frame. */
 function entityControl(value, { hass, selector, onPick, keep }) {
   const el = document.createElement("ha-selector");
   el.hass = hass;
@@ -2773,29 +2789,27 @@ function entityControl(value, { hass, selector, onPick, keep }) {
 }
 
 /**
- * Ce que chaque champ du flux devient a l'ecran.
+ * What each field of the flow becomes on screen.
  *
- * Le flux dit *quoi* demander ; cette table dit *comment*. Le nom du champ
- * suffit a faire le lien — il est stable, il est le meme dans « add »,
- * « edit » et « duplicate », et c'est la seule chose que la carte ait besoin
- * de connaitre pour dessiner autre chose qu'une boite de texte.
+ * The flow says *what* to ask; this table says *how*. The field's name is
+ * enough to make the link — it is stable, it is the same in "add", "edit" and
+ * "duplicate", and it is the only thing the card needs to know to draw
+ * anything other than a text box.
  *
- * Les libelles n'y sont pas : ils viennent du flux, comme dans Parametres,
- * pour qu'un mot corrige le soit aux deux endroits. Les aides, si — mais
- * choisies. Le flux en ecrit une sous chacun de ses neuf champs, ce qui
- * convient a une page qu'on lit une fois ; sur une feuille, cela noie les
- * trois qui en avaient besoin. Le reste se dit mieux en exemple dans la boite,
- * la ou l'oeil est deja.
+ * The labels are not here: they come from the flow, as in Settings, so that a
+ * corrected word is corrected in both places. The help texts are — but chosen.
+ * The flow writes one under each of its nine fields, which suits a page read
+ * once; on a sheet, it drowns the three that needed it. The rest is better said
+ * as an example inside the box, where the eye already is.
  *
- * Ce qui ne figure pas ici est rendu par `ha-form`, tel quel : un champ ajoute
- * un jour en Python apparaitra sans qu'on ait touche a la carte — moins beau,
- * mais present, ce qui vaut mieux qu'absent.
+ * What does not appear here is rendered by `ha-form`, as it comes: a field
+ * added one day in Python will show up without the card having been touched —
+ * less handsome, but present, which is better than absent.
  *
- * Une fabrique, pas un objet : construite au chargement du module, la table
- * figeait chaque `t(...)` dans la langue devinee avant l'arrivee de `hass` —
- * exactement le piege que les accesseurs de `SEASONS` evitent plus haut. Elle
- * ne se lit qu'a la peinture, donc la reconstruire a ce moment-la ne coute
- * rien et parle toujours la langue du jour.
+ * A factory, not an object: built when the module loads, the table froze every
+ * `t(...)` in the language guessed before `hass` arrived — exactly the trap the
+ * `SEASONS` accessors avoid further up. It is only read at paint time, so
+ * rebuilding it then costs nothing and always speaks the language of the day.
  */
 const CONTROLS = () => ({
   reference: { kind: "text", placeholder: "Michelin CrossClimate 2" },
@@ -2876,9 +2890,9 @@ const CONTROLS = () => ({
       },
     ],
   },
-  /* Un booleen qu'on ne dessine pas en interrupteur : les deux reponses ne
-     sont pas « faire » et « ne rien faire », ce sont deux suites differentes,
-     et chacune merite d'etre lue avant d'etre choisie. */
+  /* A boolean not drawn as a switch: the two answers are not "do it" and "do
+     nothing", they are two different sequels, and each deserves to be read
+     before being chosen. */
   replace: {
     kind: "choice",
     label: t("help.replace"),
@@ -2901,9 +2915,9 @@ const CONTROLS = () => ({
   },
 });
 
-/* ---------- les ecrans ---------- */
+/* ---------- the screens ---------- */
 
-/** L'identite d'un train, la ligne a laquelle l'oeil revient. */
+/** A set's identity, the line the eye comes back to. */
 function trainIdent(set, attrs) {
   const tone = look(set);
   const el = document.createElement("div");
@@ -2929,12 +2943,12 @@ function trainIdent(set, attrs) {
 }
 
 /**
- * L'en-tete d'une feuille.
+ * A sheet's header.
  *
- * Quand la feuille agit sur un train, c'est le train qui titre : « Modifier la
- * fiche » ne dit pas de quel train, et c'est la seule question qu'on se pose
- * en levant les yeux d'un formulaire a moitie rempli. Le titre passe alors en
- * sous-titre du groupe qu'il ouvre.
+ * When the sheet acts on a set, it is the set that titles it: "Edit the record"
+ * does not say which set, and that is the only question one asks on looking up
+ * from a half-filled form. The title then becomes the subtitle of the group it
+ * opens.
  */
 function sheetHead({ title, set, attrs, onBack }) {
   const el = document.createElement("div");
@@ -2960,7 +2974,7 @@ function sheetHead({ title, set, attrs, onBack }) {
   return el;
 }
 
-/** Le pied : le geste a droite, l'abandon a sa gauche. */
+/** The footer: the gesture on the right, giving up to its left. */
 function sheetFoot(buttons) {
   const foot = document.createElement("div");
   foot.className = "sheet-foot";
@@ -2981,7 +2995,7 @@ function actButton(label, iconName, variant, onClick) {
   return el;
 }
 
-/** Un verbe sans cadre, pour ce qui ne merite pas le relief d'un bouton. */
+/** A verb without a frame, for what does not deserve a button's relief. */
 function linkButton(label, variant, onClick) {
   const el = document.createElement("button");
   el.type = "button";
@@ -2995,11 +3009,11 @@ function linkButton(label, variant, onClick) {
 }
 
 /**
- * Le plan de la voiture, une roue par emplacement.
+ * The plan of the car, one wheel per slot.
  *
- * Sert a designer les capteurs. Un train de quatre a ses quatre coins ; une
- * paire n'a qu'une gauche et une droite, car l'essieu ou elle se trouve n'est
- * pas de sa fiche — il se decide au montage.
+ * Used to designate the sensors. A set of four has its four corners; a pair has
+ * only a left and a right, because the axle it sits on is not part of its
+ * record — it is decided at fitting.
  */
 function carSlots(ctx) {
   const el = document.createElement("div");
@@ -3031,11 +3045,11 @@ function carSlots(ctx) {
 }
 
 /**
- * Le plan de la voiture, un essieu a designer.
+ * The plan of the car, one axle to designate.
  *
- * Separer un train de quatre, c'est dire quelle moitie part vivre sa vie. Deux
- * bandes plutot qu'une liste deroulante : la moitie choisie et celle qui reste
- * disent chacune ce qu'elle devient, et on les lit d'un coup.
+ * Separating a set of four means saying which half goes off to live its own
+ * life. Two bands rather than a dropdown: the half chosen and the one that
+ * stays each say what they become, and both are read at a glance.
  */
 function carHalves(ctx) {
   const el = document.createElement("div");
@@ -3081,11 +3095,12 @@ function carHalves(ctx) {
 }
 
 /**
- * Deux relevés qui se contredisent.
+ * Two readings that contradict each other.
  *
- * Le flux pose la question en case a cocher, ce qui laisse a lire trois
- * paragraphes pour comprendre ce qui se decide. Les deux chiffres cote a cote
- * la posent d'eux-memes : c'est leur ecart qui fait la decision.
+ * The flow asks the question as a checkbox, which leaves three paragraphs to
+ * read before one understands what is being decided. The two figures side by
+ * side ask it by themselves: it is the gap between them that makes the
+ * decision.
  */
 function versus(ctx) {
   const el = document.createElement("div");
@@ -3135,13 +3150,13 @@ function versus(ctx) {
 }
 
 /**
- * Ce que chaque pas du flux devient comme ecran.
+ * What each step of the flow becomes as a screen.
  *
- * Un pas absent de cette table garde le rendu `ha-form` : c'est le filet, et
- * il tient tout seul.
+ * A step absent from this table keeps the `ha-form` rendering: that is the net,
+ * and it holds on its own.
  *
- * Une fabrique, pour la meme raison que `CONTROLS` : un titre fige au
- * chargement resterait dans la langue devinee avant `hass`.
+ * A factory, for the same reason as `CONTROLS`: a title frozen at load time
+ * would stay in the language guessed before `hass`.
  */
 const LAYOUTS = () => ({
   add: {
@@ -3181,9 +3196,9 @@ const LAYOUTS = () => ({
       {
         title: t("sheet.on_the_car"),
         warn: true,
-        // Le groupe n'existe que si le flux propose « replace » — donc
-        // seulement quand l'original est monte. Ailleurs, il n'y a rien a
-        // remplacer et la question ne se pose pas.
+        // The group only exists if the flow offers "replace" — so only
+        // when the original is fitted. Elsewhere there is nothing to
+        // replace and the question does not arise.
         fields: ["replace", { name: "odometer", when: (data) => data.replace !== false }],
       },
     ],
@@ -3193,8 +3208,8 @@ const LAYOUTS = () => ({
     lede: t("sheet.tpms_note"),
     verb: t("act.save"),
     body: carSlots,
-    // Le plan porte tous les champs du pas, quels qu'ils soient : quatre coins
-    // pour un train de 4, deux cotes pour une paire.
+    // The plan carries every field of the step, whatever they are: four corners
+    // for a set of 4, two sides for a pair.
     consumes: "all",
   },
   separate: {
@@ -3209,8 +3224,8 @@ const LAYOUTS = () => ({
     title: t("sheet.resync"),
     body: versus,
     consumes: ["resync"],
-    /* Deux issues nommees, pas un « Valider » sur une case cochee : ce qu'on
-       choisit ici solde un train, et un bouton doit dire ce qu'il fait. */
+    /* Two named outcomes, not a "Confirm" over a ticked box: what is chosen
+       here closes a set's account, and a button has to say what it does. */
     foot: (ctx) => [
       actButton(t("act.keep_tracking"), null, "", () => ctx.submit({ resync: false })),
       actButton(t("act.take_sensor"), null, "primary", () => ctx.submit({ resync: true })),
@@ -3229,12 +3244,12 @@ const LAYOUTS = () => ({
 });
 
 /**
- * Un champ, du schema du flux jusqu'au pixel.
+ * A field, from the flow's schema down to the pixel.
  *
- * Le libelle vient du flux — le meme mot qu'a Parametres, corrige au meme
- * endroit ; le controle vient de `CONTROLS` ; le refus vient des erreurs que
- * le pas renvoie, traduit a la cle que Python a nommee. La carte n'invente
- * rien de tout cela : elle le met en forme.
+ * The label comes from the flow — the same word as in Settings, corrected in
+ * the same place; the control comes from `CONTROLS`; the refusal comes from the
+ * errors the step returns, translated at the key Python named. The card invents
+ * none of it: it gives it shape.
  */
 function renderField(entry, { data, errors, stepId, flow, onSet, keep }) {
   const name = entry.name;
@@ -3244,8 +3259,8 @@ function renderField(entry, { data, errors, stepId, flow, onSet, keep }) {
 
   const meta = {
     label: spec.label || flow.t(`step.${stepId}.data.${name}`) || name,
-    // « facultatif » se dit sur les boites a remplir, jamais sur un choix : une
-    // pastille porte deja une reponse, et rien ne s'y laisse vide.
+    // "optional" is said on boxes to fill in, never on a choice: a chip carries
+    // an answer already, and none of them can be left empty.
     optional: entry.required === false && spec.kind !== "choice",
     helper: spec.helper,
     error: errorKey ? flow.t(`error.${errorKey}`) || errorKey : null,
@@ -3283,12 +3298,12 @@ function renderField(entry, { data, errors, stepId, flow, onSet, keep }) {
 }
 
 /**
- * Un ecran de saisie de la carte, adosse a un pas du flux.
+ * An input screen of the card, backed by a step of the flow.
  *
- * Il suit le flux plutot que de le conduire : ce que le pas courant demande
- * decide de ce qui se dessine. Choisir une source de compteur qui recule
- * renvoie le pas « resync », et l'ecran devient l'ecran de « resync » sans que
- * personne ait eu a l'orchestrer.
+ * It follows the flow rather than driving it: what the current step asks for
+ * decides what is drawn. Choosing an odometer source that reads backwards
+ * returns the "resync" step, and the screen becomes the "resync" screen without
+ * anybody having had to orchestrate it.
  */
 class FormScreen {
   live = false;
@@ -3304,9 +3319,9 @@ class FormScreen {
   #busy = false;
   #stepId = null;
   #selectors = [];
-  /** Le champ qui vient d'etre touche, pour lui rendre le clavier apres coup. */
+  /** The field just touched, to give it the keyboard back afterwards. */
   #focus = null;
-  /** Derniere poussee de `hass` transmise aux controles — voir `onHass`. */
+  /** The last `hass` push handed to the controls — see `onHass`. */
   #pushed = 0;
 
   constructor(card, { flow, path = [], done = null, ident = null, onDone = null, title = null }) {
@@ -3322,22 +3337,22 @@ class FormScreen {
 
   onHass(hass) {
     this.#flow.hass = hass;
-    // Au plus une fois par seconde : `hass` est reaffecte a chaque changement
-    // d'etat de toute la maison, et chaque affectation fait re-rendre les
-    // `ha-form`/`ha-selector` ouverts. Un selecteur d'entite vieux d'une
-    // seconde reste juste ; une feuille qui se re-rend en continu ne l'est pas.
+    // At most once a second: `hass` is reassigned at every state change in the
+    // whole house, and each assignment makes the open `ha-form`/`ha-selector`
+    // re-render. An entity picker one second old is still right; a sheet that
+    // re-renders continuously is not.
     const now = Date.now();
     if (now - this.#pushed < 1000) return;
     this.#pushed = now;
     for (const selector of this.#selectors) selector.hass = hass;
   }
 
-  /** Ouvre le flux, descend jusqu'au pas vise, et se peint. */
+  /** Opens the flow, walks down to the step aimed at, and paints itself. */
   async open() {
     try {
-      // Un flux deja ouvert est repris ou il en est : c'est ainsi qu'un pas
-      // inattendu — « resync », quand deux relevés se contredisent — devient
-      // un ecran sans qu'on ait a rejouer le chemin depuis la racine.
+      // A flow already open is picked up where it stands: that is how an
+      // unexpected step — "resync", when two readings contradict each other —
+      // becomes a screen without having to replay the path from the root.
       if (!this.#flow.step) await this.#flow.open(this.#path);
     } catch (err) {
       this.#card.dropScreen(this, flowError(err));
@@ -3351,7 +3366,7 @@ class FormScreen {
     this.#card.repaintSheet(true);
   }
 
-  /** Repart des valeurs du pas courant, quand c'en est un nouveau. */
+  /** Starts again from the current step's values, when it is a new one. */
   #adopt() {
     const step = this.#flow.step;
     if (step?.step_id === this.#stepId) return;
@@ -3363,7 +3378,7 @@ class FormScreen {
     return LAYOUTS()[this.#stepId] ?? null;
   }
 
-  /** Le contexte que les corps sur mesure recoivent. */
+  /** The context the bespoke bodies receive. */
   #ctx() {
     return {
       step: this.#flow.step,
@@ -3387,9 +3402,9 @@ class FormScreen {
     const layout = this.#layout;
     this.#selectors = [];
 
-    // Le formulaire d'un train prend sa teinte : les pastilles de choix, la
-    // moitie designee sur le plan et le bouton du geste s'y accordent, et l'on
-    // reste dans le meme jeu de pneus d'un ecran a l'autre.
+    // A set's form takes its shade: the choice chips, the half designated on
+    // the plan and the gesture's button fall in with it, and one stays in the
+    // same set of tyres from one screen to the next.
     if (this.#ident?.set) {
       const tone = look(this.#ident.set);
       sheet.style.setProperty("--tint", tone.tint);
@@ -3416,7 +3431,7 @@ class FormScreen {
       return;
     }
 
-    // Le titre passe en sous-titre quand l'en-tete est pris par le train.
+    // The title becomes a subtitle when the header is taken by the set.
     if (this.#ident?.set && (layout?.title || this.#title)) {
       const h = document.createElement("h2");
       h.textContent = layout?.title || this.#title;
@@ -3454,9 +3469,9 @@ class FormScreen {
       if (el) sheet.appendChild(el);
     }
 
-    // Ce que le flux demande et que la carte ne sait pas dessiner. Rien
-    // aujourd'hui — et c'est bien pour cela qu'il faut que ce soit ecrit : le
-    // jour ou Python gagne un champ, il apparait ici sans qu'on y touche.
+    // What the flow asks for and the card cannot draw. Nothing today — and
+    // that is precisely why it has to be written: the day Python gains a
+    // field, it shows up here without anyone touching this.
     const eaten = (name) =>
       drawn.has(name) ||
       layout.consumes === "all" ||
@@ -3487,9 +3502,9 @@ class FormScreen {
     for (const item of group.fields ?? []) {
       const name = typeof item === "string" ? item : item.name;
       const entry = (step.data_schema ?? []).find((field) => field.name === name);
-      // Un champ que le flux n'offre pas a ce pas-la n'est pas dessine :
-      // « replace » n'existe que pour un original monte, et l'inventer
-      // proposerait de remplacer ce qui n'est pas sur la voiture.
+      // A field the flow does not offer at that step is not drawn:
+      // "replace" only exists for a fitted original, and inventing it
+      // would offer to replace what is not on the car.
       if (!entry) continue;
       drawn.add(name);
       if (typeof item !== "string" && item.when && !item.when(this.#data)) continue;
@@ -3512,10 +3527,10 @@ class FormScreen {
       summary.appendChild(document.createTextNode(group.fold));
       details.appendChild(summary);
       details.appendChild(build());
-      // Un champ rempli ne se cache pas : on ouvre le pli s'il porte deja
-      // quelque chose, sinon on modifierait une fiche a moitie sans le voir.
-      // Zero ne compte pas — « distance déjà parcourue » vaut zero sur toute
-      // fiche neuve, et le pli s'ouvrirait toujours pour ne rien montrer.
+      // A filled field is not hidden: the fold is opened if it already holds
+      // something, otherwise one would edit half a record without seeing it.
+      // Zero does not count — "distance already run" is zero on every new
+      // record, and the fold would always open to show nothing.
       if (entries.some((entry) => filled(this.#data[entry.name]) && this.#data[entry.name] !== 0)) {
         details.open = true;
       }
@@ -3551,7 +3566,7 @@ class FormScreen {
     });
   }
 
-  /** Le filet : le schema tel quel, rendu par Home Assistant. */
+  /** The net: the schema as it comes, rendered by Home Assistant. */
   #haForm(step, schema) {
     const form = document.createElement("ha-form");
     form.hass = this.#flow.hass;
@@ -3614,12 +3629,12 @@ class FormScreen {
   }
 
   /**
-   * Ce qui part au flux.
+   * What leaves for the flow.
    *
-   * Un champ vide n'est pas envoye vide : `vol.Optional` sans valeur laisse le
-   * flux decider, et c'est lui qui sait si l'absence efface ou conserve. Un
-   * champ requis part toujours, meme vide — c'est ainsi que « Donnez un nom au
-   * vehicule » revient plutot que rien.
+   * An empty field is not sent empty: `vol.Optional` without a value leaves the
+   * flow to decide, and it is the flow that knows whether absence clears or
+   * keeps. A required field always leaves, even empty — that is how "Give the
+   * vehicle a name" comes back rather than nothing.
    */
   #payload() {
     const schema = this.#flow.step?.data_schema ?? [];
@@ -3651,51 +3666,52 @@ class FormScreen {
       this.onDone?.();
       return;
     }
-    // Un pas qui revient avec des erreurs garde ce qui a ete tape : la
-    // correction ne se fait pas sur un formulaire vide.
+    // A step that comes back with errors keeps what was typed: the
+    // correction is not made on an empty form.
     this.#adopt();
     this.#card.repaintSheet(true);
   }
 
-  /** Abandonne le flux si l'ecran se ferme avant sa fin. */
+  /** Gives up the flow if the screen closes before its end. */
   leave() {
     this.#flow.cancel();
   }
 
   /**
-   * Rend le clavier au champ qu'on venait de toucher.
+   * Gives the keyboard back to the field just touched.
    *
-   * Une pastille cliquee repeint la feuille quand elle change ce qui s'affiche
-   * — « remplacer le train monté » fait apparaitre le relevé. Sans cela, le
-   * focus retomberait sur la feuille, et la touche Tab repartirait du haut.
+   * A clicked chip repaints the sheet when it changes what is displayed —
+   * "replace the fitted set" makes the reading appear. Without this, focus
+   * would fall back on the sheet, and the Tab key would start again from the
+   * top.
    */
   #restoreFocus(sheet) {
     if (!this.#focus) return;
-    // Le nom vient du schema du serveur : echappe, pour qu'un guillemet ne
-    // casse pas le selecteur.
+    // The name comes from the server's schema: escaped, so that a quote does
+    // not break the selector.
     const field = sheet.querySelector(`[data-field="${CSS.escape(this.#focus)}"]`);
     this.#focus = null;
     field?.querySelector('[aria-checked="true"], [aria-pressed="true"], input')?.focus();
   }
 }
 
-/** Vrai quand un champ porte quelque chose. Zero en est. */
+/** True when a field carries something. Zero counts. */
 const filled = (value) =>
   value !== undefined && value !== null && value !== "" && !(Array.isArray(value) && !value.length);
 
 /**
- * Les reglages du vehicule, en un seul ecran.
+ * The vehicle's settings, on a single screen.
  *
- * Le flux les separe en deux pas — le nom et le rappel de permutation d'un
- * cote, la source du compteur de l'autre — parce qu'un flux avance par pas et
- * qu'un pas est un enregistrement. Ce decoupage n'a pas de sens ici : ce sont
- * trois reponses sur la meme voiture, et le menu qui les separait demandait de
- * choisir laquelle avant meme de savoir ce qu'on voulait changer.
+ * The flow splits them into two steps — the name and the rotation reminder on
+ * one side, the odometer source on the other — because a flow advances step by
+ * step and a step is a save. That division makes no sense here: they are three
+ * answers about the same car, and the menu that separated them required
+ * choosing which one before even knowing what one wanted to change.
  *
- * L'ecran lit donc les deux schemas, les montre ensemble, et n'ecrit que ce
- * qui a bouge. Le compteur part le premier : c'est le seul des deux qui peut
- * poser une question de plus — deux relevés qui se contredisent — et le nom,
- * lui, recharge l'entree en s'enregistrant.
+ * The screen therefore reads both schemas, shows them together, and writes only
+ * what moved. The odometer leaves first: it is the only one of the two that can
+ * ask a further question — two readings contradicting each other — and the
+ * name, for its part, reloads the entry as it saves.
  */
 class SettingsScreen {
   live = false;
@@ -3711,7 +3727,7 @@ class SettingsScreen {
   #busy = false;
   #error = null;
   #selectors = [];
-  /** Derniere poussee de `hass` transmise aux controles — meme regle qu'en haut. */
+  /** The last `hass` push handed to the controls — same rule as above. */
   #pushed = 0;
 
   constructor(card, { hass, entryId }) {
@@ -3729,12 +3745,12 @@ class SettingsScreen {
   }
 
   /**
-   * Va chercher les deux schemas, l'un apres l'autre.
+   * Fetches the two schemas, one after the other.
    *
-   * L'un apres l'autre, et non ensemble : deux flux ouverts en meme temps sur
-   * la meme entree n'ont aucune raison de bien se tenir, et rien ici ne presse.
-   * Chacun est referme aussitot lu — on ne gardait ouvert que pour ecrire, et
-   * l'ecriture viendra plus tard, avec ses propres flux.
+   * One after the other, and not together: two flows open at once on the same
+   * entry have no reason to behave, and nothing here is in a hurry. Each is
+   * closed as soon as it is read — they were only kept open to write, and the
+   * writing will come later, with flows of its own.
    */
   async open() {
     try {
@@ -3760,7 +3776,7 @@ class SettingsScreen {
     return this.#hass?.localize?.(`component.${DOMAIN}.options.${key}`, placeholders);
   }
 
-  /** Un `Flow` de facade, pour que `renderField` lise les memes traductions. */
+  /** A stand-in `Flow`, so that `renderField` reads the same translations. */
   #voice() {
     return { t: (key, ph) => this.#t(key, ph), hass: this.#hass };
   }
@@ -3789,8 +3805,8 @@ class SettingsScreen {
       sheet.appendChild(err);
     }
 
-    // Trois blocs, un par chose qu'on peut vouloir changer : ce qui nomme, ce
-    // qui compte, ce qui rappelle. Le meme decoupage que la fiche d'un train.
+    // Three blocks, one per thing one may want to change: what names, what
+    // counts, what reminds. The same division as a set's record.
     const groups = [
       { title: t("group.vehicle"), fields: ["vehicle"] },
       { title: t("group.odometer"), fields: ["odometer_entity"] },
@@ -3847,12 +3863,12 @@ class SettingsScreen {
     return (this.#data[name] ?? null) !== (this.#was[name] ?? null);
   }
 
-  /** N'ecrit que ce qui a bouge : un pas sans changement recharge l'entree pour rien. */
+  /** Writes only what moved: a step without a change reloads the entry for nothing. */
   async #save() {
     if (this.#busy) return;
-    // Rien de touche : on referme sans annoncer un enregistrement qui n'a pas
-    // eu lieu. « Enregistré » sur une feuille ouverte puis refermee telle
-    // quelle laisse croire qu'on a change quelque chose sans le vouloir.
+    // Nothing touched: we close without announcing a save that never
+    // happened. "Saved" on a sheet opened then closed as it was suggests
+    // something was changed without meaning to.
     const touched = ["odometer_entity", "vehicle", "rotation_interval"].some((name) =>
       this.#changed(name)
     );
@@ -3879,9 +3895,9 @@ class SettingsScreen {
     try {
       if (this.#changed("odometer_entity")) {
         const flow = await send("odometer");
-        // Le compteur peut repondre par une question : le nouveau capteur lit
-        // moins que ce qui a ete compte. Elle se pose dans sa propre feuille,
-        // et le nom s'enregistre une fois qu'on y a repondu.
+        // The odometer may answer with a question: the new sensor reads less
+        // than what has been counted. It is asked in its own sheet, and the
+        // name saves once it has been answered.
         if (!flow.ended) {
           this.#busy = false;
           this.#card.dropScreen(this);
@@ -3910,8 +3926,8 @@ class SettingsScreen {
       vehicle: this.#data.vehicle ?? "",
       rotation_interval: this.#data.rotation_interval ?? 0,
     });
-    // Un nom vide revient en erreur plutot qu'en abandon : la feuille est
-    // deja partie, alors le refus se dit dans le bandeau.
+    // An empty name comes back as an error rather than an abort: the sheet
+    // is already gone, so the refusal is said in the toast.
     if (!flow.ended) {
       const message = flow.step?.errors?.vehicle;
       flow.cancel();
@@ -3932,36 +3948,36 @@ class TyresCard extends HTMLElement {
   #painted = false;
 
   /**
-   * L'hote des feuilles, pose dans `document.body`.
+   * The host of the sheets, placed in `document.body`.
    *
-   * Le voile est en `position: fixed`, et un element fixe ne s'ancre au
-   * viewport que si aucun de ses ancetres ne cree de contexte d'empilement.
-   * Home Assistant en cree : il pose un `transform` sur les cartes pendant le
-   * glisser-deposer en mode edition, et les vues « sections » les enveloppent
-   * dans un conteneur triable. Depuis le shadow root de la carte, la feuille
-   * se dessinait alors dans la carte, rognee par son `overflow: hidden`.
+   * The veil is `position: fixed`, and a fixed element only anchors to the
+   * viewport if none of its ancestors creates a stacking context. Home
+   * Assistant creates one: it puts a `transform` on the cards during
+   * drag-and-drop in edit mode, and the "sections" views wrap them in a
+   * sortable container. From the card's shadow root, the sheet was then drawn
+   * inside the card, clipped by its `overflow: hidden`.
    *
-   * D'ou cet hote a part, hors de la carte. Il porte son propre shadow root
-   * avec la meme feuille de style : sortir du shadow root de la carte, c'est
-   * sortir de ses styles, et tout ce que la feuille dessine y est decrit.
+   * Hence this separate host, outside the card. It carries its own shadow root
+   * with the same style sheet: leaving the card's shadow root means leaving its
+   * styles, and everything the sheet draws is described there.
    */
   #portal = null;
   #portalRoot = null;
 
   /**
-   * Les feuilles ouvertes, de la plus ancienne a celle qu'on regarde.
+   * The open sheets, from the oldest to the one being looked at.
    *
-   * Une pile, et non une feuille : ouvrir « Modifier la fiche » depuis un
-   * train empilait autrefois un dialogue sur un dialogue, ou plutot effacait
-   * le premier — on annulait, et l'on retombait sur la carte, le train perdu.
-   * Ici on revient d'ou l'on vient.
+   * A stack, and not a sheet: opening "Edit the record" from a set used to
+   * stack a dialog on a dialog, or rather wipe out the first — one cancelled,
+   * and landed back on the card, the set lost. Here one comes back from where
+   * one came.
    */
   #stack = [];
 
   /**
-   * Le geste qui attend d'etre confirme sur la fiche ouverte : null | "mount"
-   * | "unmount" | "rotate" | "retire" | "adjust" | "delete". `#arg` porte ce
-   * que le geste a besoin de retenir — l'essieu vise, pour un montage.
+   * The gesture waiting to be confirmed on the open record: null | "mount" |
+   * "unmount" | "rotate" | "retire" | "adjust" | "delete". `#arg` carries what
+   * the gesture needs to remember — the axle aimed at, for a fitting.
    */
   #mode = null;
   #arg = null;
@@ -3987,10 +4003,10 @@ class TyresCard extends HTMLElement {
     this.#painted = false;
     this.#mode = null;
     this.#arg = null;
-    // Le shadow root est reecrit juste apres : une feuille laissee ouverte
-    // disparaitrait de l'ecran en laissant son flux en cours cote serveur.
-    // Et depuis qu'elle vit dans `body`, la reecriture ne l'emporte plus :
-    // c'est a nous de la retirer.
+    // The shadow root is rewritten just below: a sheet left open would
+    // vanish from the screen leaving its flow running on the server side.
+    // And since it lives in `body`, the rewrite no longer carries it away:
+    // it is up to us to remove it.
     while (this.#stack.length) this.#stack.pop().leave?.();
     this.#destroyPortal();
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
@@ -4007,27 +4023,26 @@ class TyresCard extends HTMLElement {
     if (!this.#config || !this.#body) return;
     const ids = [this.#config.entity];
     if (this.#config.advice_entity) ids.push(this.#config.advice_entity);
-    // La langue compte comme un changement d'etat : sans cela les mots de
-    // l'ancienne restaient a l'ecran jusqu'a la prochaine poussee d'entite.
+    // The language counts as a state change: without this the words of the
+    // old one stayed on screen until the next entity push.
     const changed = watch(hass, ids, this.#seen) || LANG !== spoke;
     if (!changed && this.#painted) return;
     this.#painted = true;
     this.#draw();
   }
 
-  /* ----- la pile de feuilles -----
+  /* ----- the stack of sheets -----
 
-     Un ecran est un objet a trois cles : `key` pour le reconnaitre, `live`
-     pour dire s'il se repeint quand l'etat de la maison bouge, `paint` pour
-     se dessiner. La fiche d'un train est vivante — ses kilometres avancent
-     pendant qu'on la regarde. Un formulaire ne l'est pas : le repeindre
-     effacerait ce qu'on est en train d'y taper. */
+     A screen is an object with three keys: `key` to recognise it, `live` to say
+     whether it repaints when the state of the house moves, `paint` to draw
+     itself. A set's record is live — its kilometres advance while one looks at
+     it. A form is not: repainting it would wipe out what is being typed. */
 
   get stackDepth() {
     return this.#stack.length;
   }
 
-  /** Empile un ecran et l'affiche. */
+  /** Pushes a screen and shows it. */
   pushScreen(screen) {
     this.#stack.push(screen);
     this.repaintSheet(true);
@@ -4035,11 +4050,11 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * Retire un ecran, et dit au passage ce qui s'est joue.
+   * Removes a screen, and says in passing what came of it.
    *
-   * L'ecran vise plutot que le dernier : une reponse du serveur peut arriver
-   * apres qu'on a ouvert autre chose par-dessus, et depiler aveuglement
-   * fermerait la mauvaise feuille.
+   * The screen aimed at rather than the last one: a reply from the server may
+   * arrive after something else has been opened on top, and popping blindly
+   * would close the wrong sheet.
    */
   dropScreen(screen, message = null) {
     const at = this.#stack.indexOf(screen);
@@ -4050,18 +4065,17 @@ class TyresCard extends HTMLElement {
     if (message) notify(this, message);
   }
 
-  /** Ferme tout. */
+  /** Closes everything. */
   closeSheets() {
     while (this.#stack.length) this.#stack.pop().leave?.();
     this.repaintSheet(true);
   }
 
   /**
-   * Repeint la feuille du dessus.
+   * Repaints the topmost sheet.
    *
-   * `force` distingue les deux appelants : un geste de l'utilisateur repeint
-   * toujours, une nouvelle poussee d'etat ne touche qu'un ecran qui se declare
-   * vivant.
+   * `force` tells the two callers apart: a gesture by the user always repaints,
+   * a new state push only touches a screen that declares itself live.
    */
   repaintSheet(force = false) {
     const top = this.#stack[this.#stack.length - 1] ?? null;
@@ -4084,16 +4098,16 @@ class TyresCard extends HTMLElement {
       sheet.setAttribute("aria-modal", "true");
       sheet.tabIndex = -1;
       scrim.appendChild(sheet);
-      // Un clic sur le voile referme l'etage du dessus, un clic dans la
-      // feuille ne traverse pas : la carte, dessous, ecoute encore les siens.
+      // A click on the veil closes the top floor, a click inside the sheet
+      // does not go through: the card underneath is still listening for its own.
       scrim.addEventListener("click", (event) => {
         if (event.target === scrim) this.dropScreen(this.#stack[this.#stack.length - 1]);
         event.stopPropagation();
       });
       scrim.addEventListener("keydown", (event) => {
         event.stopPropagation();
-        // `defaultPrevented` : un Echap deja consomme — la liste ouverte d'un
-        // `ha-selector` qui se referme — ne doit pas emporter la feuille avec.
+        // `defaultPrevented`: an Escape already consumed — the open list of an
+        // `ha-selector` closing — must not carry the sheet away with it.
         if (event.key === "Escape" && !event.defaultPrevented) {
           this.dropScreen(this.#stack[this.#stack.length - 1]);
         }
@@ -4102,14 +4116,14 @@ class TyresCard extends HTMLElement {
     }
 
     const sheet = scrim.querySelector(".sheet");
-    // Repeindre le meme ecran ne doit pas le renvoyer en haut : on repeint a
-    // chaque relevé de pression, et la feuille remonterait sous les doigts.
-    // Un ecran different, lui, s'ouvre a son debut.
+    // Repainting the same screen must not send it back to the top: we repaint
+    // at every pressure reading, and the sheet would scroll up under one's
+    // fingers. A different screen, for its part, opens at its beginning.
     const scrolled = scrim.dataset.key === top.key ? sheet.scrollTop : 0;
     sheet.replaceChildren();
-    // La teinte appartient a l'ecran, pas a la feuille : un formulaire qui ne
-    // parle d'aucun train garderait sinon le bleu du jeu d'hiver qu'on
-    // regardait juste avant.
+    // The shade belongs to the screen, not to the sheet: a form that speaks of
+    // no set would otherwise keep the blue of the winter set one was looking
+    // at a moment before.
     sheet.style.removeProperty("--tint");
     sheet.removeAttribute("aria-label");
     scrim.dataset.key = top.key;
@@ -4119,36 +4133,36 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * L'hote des feuilles, cree au premier besoin.
+   * The host of the sheets, created on first need.
    *
-   * Pose en fin de `body` : a z-index egal, c'est l'ordre du document qui
-   * tranche, et une feuille ouverte apres un dialogue de Home Assistant doit
-   * passer devant lui.
+   * Placed at the end of `body`: at equal z-index it is document order that
+   * decides, and a sheet opened after a Home Assistant dialog has to come in
+   * front of it.
    *
-   * L'ordre du document ne suffit pourtant pas quand la carte est elle-meme
-   * dans un dialogue — c'est le cas depuis la pastille du plan, qui l'ouvre en
-   * popup browser_mod. Deux choses s'y opposent, et il faut les deux.
+   * Document order is not enough, however, when the card is itself in a dialog
+   * — which is the case from the floor-plan badge, which opens it as a
+   * browser_mod popup. Two things stand in the way, and both have to be dealt
+   * with.
    *
-   * La premiere est la couche superieure du navigateur : un dialogue y vit, et
-   * elle se peint au-dessus de toute la page quel que soit le `z-index`. Une
-   * feuille posee dans `body` passait donc dessous, et le menu avec elle.
+   * The first is the browser's top layer: a dialog lives there, and it paints
+   * above the whole page whatever the `z-index`. A sheet placed in `body`
+   * therefore went underneath, and the menu with it.
    *
-   * La seconde est l'inertie. Un dialogue modal rend inerte tout ce qui n'est
-   * pas dans son sous-arbre : monter dans la couche superieure rendait le menu
-   * visible, mais il restait mort au clic et au focus. Aucun attribut ne
-   * permet de s'en exempter — la seule sortie est d'etre soi-meme le dialogue
-   * modal du dessus, ce que fait `showModal()`. Le nouveau devient le plus
-   * haut, son sous-arbre redevient vivant, et le dialogue qui porte la carte
-   * passe a son tour derriere.
+   * The second is inertness. A modal dialog makes inert everything outside its
+   * subtree: rising into the top layer made the menu visible, but it stayed
+   * dead to clicks and to focus. No attribute exempts one from it — the only
+   * way out is to be oneself the topmost modal dialog, which is what
+   * `showModal()` does. The new one becomes the highest, its subtree comes back
+   * to life, and the dialog carrying the card falls behind in its turn.
    *
-   * L'hote est donc rouvert a chaque couche, et referme des qu'il n'en porte
-   * plus aucune : un dialogue modal laisse ouvert bloquerait la page entiere.
+   * The host is therefore reopened at every layer, and closed as soon as it
+   * carries none: a modal dialog left open would block the whole page.
    *
-   * Il demeure sans surface : ce sont ses deux couches, en position fixe, qui
-   * couvrent l'ecran — un hote qui s'etendrait capterait les clics. D'ou la
-   * remise a zero de ce qu'un `dialog` recoit du navigateur : cadre, fond,
-   * remplissage, largeurs maximales, et le voile qu'il pose derriere lui et
-   * que le voile de nos feuilles doublerait.
+   * It stays without a surface of its own: it is its two layers, fixed, that
+   * cover the screen — a host that spread out would catch the clicks. Hence the
+   * reset of what a `dialog` receives from the browser: frame, background,
+   * padding, maximum widths, and the veil it lays behind itself that our
+   * sheets' veil would double.
    */
   #openPortal() {
     if (!this.#portal) {
@@ -4157,13 +4171,13 @@ class TyresCard extends HTMLElement {
       host.style.cssText =
         "position:fixed;top:0;left:0;width:0;height:0;max-width:none;max-height:none;" +
         "margin:0;padding:0;border:0;background:transparent;overflow:visible;z-index:1000;";
-      // Echap appartient aux couches, pas a l'hote : la carte referme un etage
-      // a la fois, la ou le navigateur fermerait tout d'un coup.
+      // Escape belongs to the layers, not to the host: the card closes one floor
+      // at a time, where the browser would close everything at once.
       host.addEventListener("cancel", (event) => event.preventDefault());
 
-      // La racine d'ombre descend d'un cran : `dialog` ne figure pas parmi les
-      // elements qui en acceptent une, et `attachShadow` y leve. C'est donc un
-      // `div` interieur qui la porte, sans surface lui non plus.
+      // The shadow root goes down a level: `dialog` is not among the elements
+      // that accept one, and `attachShadow` throws there. So it is an inner
+      // `div` that carries it, without a surface either.
       const inner = document.createElement("div");
       inner.style.cssText = "width:0;height:0;";
       const root = inner.attachShadow({ mode: "open" });
@@ -4182,10 +4196,10 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * Referme l'hote quand il ne porte plus ni feuille ni menu.
+   * Closes the host when it carries neither sheet nor menu any more.
    *
-   * Il reste en place, vide : c'est un dialogue modal, et le laisser ouvert
-   * rendrait inerte la page qu'on vient de rendre a l'utilisateur.
+   * It stays in place, empty: it is a modal dialog, and leaving it open would
+   * make inert the page just handed back to the user.
    */
   #idlePortal() {
     const root = this.#portalRoot;
@@ -4194,18 +4208,19 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * Retire la couche des feuilles, en laissant l'hote en place.
+   * Removes the sheet layer, leaving the host in place.
    *
-   * L'hote porte aussi le menu de la carte, qui n'a rien a voir avec la pile
-   * d'ecrans : le vider entierement fermerait l'un en refermant l'autre. Vide,
-   * il ne coute rien — ses deux couches sont en position fixe, donc hors flux.
+   * The host also carries the card's menu, which has nothing to do with the
+   * stack of screens: emptying it entirely would close one by closing the
+   * other. Empty, it costs nothing — its two layers are fixed, therefore out of
+   * flow.
    */
   #closeSheetLayer() {
     this.#portalRoot?.querySelector(".scrim")?.remove();
     this.#idlePortal();
   }
 
-  /** Referme tout et retire l'hote du document : rien ne doit lui survivre. */
+  /** Closes everything and removes the host from the document: nothing may outlive it. */
   #destroyPortal() {
     this.#portal?.remove();
     this.#portal = null;
@@ -4213,21 +4228,21 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * La carte quitte la page : la feuille ne peut pas y rester.
+   * The card leaves the page: the sheet cannot stay on it.
    *
-   * Elle vit dans `body` et non dans la carte — changer de vue ou de tableau
-   * de bord la laisserait ouverte, devant une carte qui n'est plus la.
+   * It lives in `body` and not in the card — changing view or dashboard would
+   * leave it open, in front of a card that is no longer there.
    */
   disconnectedCallback() {
     while (this.#stack.length) this.#stack.pop().leave?.();
     this.#destroyPortal();
   }
 
-  /* ----- appels au composant ----- */
+  /* ----- calls to the component ----- */
 
   #call(service, data) {
-    // Services d'entite : c'est la cible qui designe le vehicule, donc deux
-    // voitures suivies ne se marchent jamais dessus.
+    // Entity services: it is the target that designates the vehicle, so two
+    // tracked cars never tread on each other.
     return (
       this.#hass?.callService(DOMAIN, service, data, {
         entity_id: this.#config.entity,
@@ -4236,48 +4251,48 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * Un service, et le mot qui suit — mais seulement s'il a abouti.
+   * A service, and the word that follows — but only if it went through.
    *
-   * Le composant refuse maintenant a voix haute : un train a l'historique
-   * qu'on essaie de monter, une paire qu'on essaie de permuter, un compteur
-   * qui recule. Annoncer « Train monte » sans attendre la reponse, c'est
-   * afficher le contraire de ce qui vient de se passer — et Home Assistant
-   * pose son propre bandeau d'erreur juste a cote.
+   * The component now refuses out loud: a set in history one tries to fit, a
+   * pair one tries to rotate, an odometer going backwards. Announcing "Set
+   * fitted" without waiting for the reply means displaying the opposite of what
+   * just happened — and Home Assistant lays its own error toast right beside
+   * it.
    *
-   * En cas de refus la feuille reste ouverte, la ou le geste a ete demande :
-   * la refermer emporterait la question sans y avoir repondu.
+   * On a refusal the sheet stays open, where the gesture was asked for: closing
+   * it would carry the question away without having answered it.
    */
   #run(service, data, message) {
     this.#call(service, data).then(
       () => this.#did(message),
-      // Le refus est deja dit : `callService` pose le bandeau lui-meme, avec
-      // le message que le composant a ecrit. Le repeter ferait deux voix.
+      // The refusal has been said already: `callService` lays the toast itself,
+      // with the message the component wrote. Repeating it would make two voices.
       () => {}
     );
   }
 
-  /** L'entree de configuration du vehicule, que le capteur porte en attribut. */
+  /** The vehicle's config entry, which the sensor carries as an attribute. */
   #entryId() {
     return this.#seen[this.#config.entity]?.attributes?.entry_id ?? null;
   }
 
-  /** Les attributs du capteur, d'ou tout se lit. */
+  /** The sensor's attributes, where everything is read from. */
   #attrs() {
     return this.#seen[this.#config.entity]?.attributes ?? {};
   }
 
-  /** Un train, tel que le capteur le porte. */
+  /** A set, as the sensor carries it. */
   #set(setId) {
     const sets = this.#attrs().sets;
     return (Array.isArray(sets) ? sets : []).find((other) => other.id === setId) ?? null;
   }
 
   /**
-   * Ouvre un ecran de saisie, adosse a un pas du flux d'options.
+   * Opens an input screen, backed by a step of the options flow.
    *
-   * `step` est le pas vise, `setId` le train dont il parle — la carte descend
-   * jusque-la sans montrer les pas traverses, puisqu'ils ne posent que des
-   * questions auxquelles on a deja repondu en touchant une ligne.
+   * `step` is the step aimed at, `setId` the set it speaks of — the card walks
+   * down to it without showing the steps crossed, since they only ask questions
+   * already answered by touching a row.
    */
   #openStep(step, { setId = null, done = null, after = null } = {}) {
     const entryId = this.#entryId();
@@ -4308,11 +4323,11 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * Supprime un train.
+   * Deletes a set.
    *
-   * La carte a deja confirme, et dit ce que la suppression efface : le pas de
-   * confirmation du flux est repondu dans la foulee, sinon la meme question
-   * serait posee deux fois.
+   * The card has confirmed already, and said what the deletion erases: the
+   * flow's confirmation step is answered on the spot, otherwise the same
+   * question would be asked twice.
    */
   #deleteSet(set) {
     const entryId = this.#entryId();
@@ -4336,15 +4351,14 @@ class TyresCard extends HTMLElement {
     })();
   }
 
-  /* ----- rendu ----- */
+  /* ----- rendering ----- */
 
   /**
-   * La carte, puis la feuille ouverte si elle est vivante.
+   * The card, then the open sheet if it is live.
    *
-   * Les deux se repeignent ensemble a chaque etat recu : la fiche d'un train
-   * montre des kilometres et un essieu, qui bougent pendant qu'elle est
-   * ouverte. Une feuille peinte une fois pour toutes afficherait l'etat
-   * d'avant le geste qu'on vient d'y faire.
+   * Both repaint together at every state received: a set's record shows
+   * kilometres and an axle, which move while it is open. A sheet painted once
+   * and for all would show the state from before the gesture just made on it.
    */
   #draw() {
     this.#drawBody();
@@ -4371,7 +4385,7 @@ class TyresCard extends HTMLElement {
 
     this.#header(attrs);
 
-    // le jeu monte
+    // the fitted set
     if (same) {
       this.#body.appendChild(this.#hero(null, front, attrs));
     } else if (front || rear) {
@@ -4391,14 +4405,14 @@ class TyresCard extends HTMLElement {
 
     this.#pressures(attrs);
 
-    // conseil
+    // advice
     const advice = this.#config.advice_entity
       ? this.#seen[this.#config.advice_entity]?.state === "on"
       : false;
     if (advice) {
-      // `ha-alert` plutot qu'une boite a nous : le fond etait un
-      // `rgba(255,167,38,…)` en dur sous un texte en `var(--warning-color)`,
-      // donc du rouge sur de l'orange chez qui redefinit l'avertissement.
+      // `ha-alert` rather than a box of our own: the background was a hard-coded
+      // `rgba(255,167,38,…)` under text in `var(--warning-color)`, therefore red
+      // on orange for anyone who redefines the warning colour.
       const a = document.createElement("ha-alert");
       a.className = "advice";
       a.setAttribute("alert-type", "warning");
@@ -4406,10 +4420,10 @@ class TyresCard extends HTMLElement {
       this.#body.appendChild(a);
     }
 
-    // Aucun train : ne rien dire de plus que « rien n'est monte » laisserait
-    // la carte sur une impasse, alors que tout se declare depuis elle. C'est
-    // le seul endroit ou le geste garde un bouton — une carte vide est faite
-    // pour etre remplie, et le menu seul se chercherait.
+    // No set at all: saying nothing beyond "nothing is fitted" would leave the
+    // card at a dead end, when everything is declared from it. This is the
+    // only place where the gesture keeps a button — an empty card is made to
+    // be filled, and the menu on its own would have to be hunted for.
     if (!sets.length) {
       const p = document.createElement("div");
       p.className = "empty";
@@ -4426,9 +4440,9 @@ class TyresCard extends HTMLElement {
       return;
     }
 
-    // Le compte ne se dit qu'ici. L'en-tete porte le compteur, que la liste ne
-    // peut pas dire ; la liste porte son nombre, aligne a droite comme les
-    // kilometrages des lignes qu'il annonce.
+    // The count is said only here. The header carries the odometer, which the
+    // list cannot say; the list carries its number, flushed right like the
+    // mileages of the rows it introduces.
     const lb = document.createElement("div");
     lb.className = "label";
     const l1 = document.createElement("span");
@@ -4439,8 +4453,8 @@ class TyresCard extends HTMLElement {
     lb.append(l1, l2);
     this.#body.appendChild(lb);
 
-    // Les jeux de l'historique en dernier : ils se consultent, ils ne se
-    // manipulent pas, et ils n'ont donc rien a faire dans le flux du geste.
+    // The sets in history last: they are consulted, they are not handled, and
+    // they therefore have no business in the flow of the gesture.
     const worst = Math.max(1, ...sets.map((s) => Number(s.km) || 0));
     for (const set of [...sets].sort((a, b) => (a.retired ? 1 : 0) - (b.retired ? 1 : 0))) {
       this.#body.appendChild(this.#row(set, worst, attrs));
@@ -4448,12 +4462,12 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * L'en-tete : de quelle voiture on parle, et ou en est son compteur.
+   * The header: which car is being spoken of, and where its odometer stands.
    *
-   * La carte s'ouvrait sur un grand nombre sans jamais nommer le vehicule.
-   * Deux voitures sur le meme tableau de bord ne se distinguaient que par la
-   * reference du pneu monte — et il n'y avait nulle part ou accrocher ce qui
-   * ne vise aucun train en particulier.
+   * The card used to open on a big number without ever naming the vehicle. Two
+   * cars on the same dashboard could only be told apart by the reference of the
+   * fitted tyre — and there was nowhere to hang what aims at no set in
+   * particular.
    */
   #header(attrs) {
     const el = document.createElement("div");
@@ -4466,9 +4480,9 @@ class TyresCard extends HTMLElement {
     h.textContent = this.#config.title || attrs.vehicle || t("card.tyres");
     txt.appendChild(h);
 
-    // Le compteur se lit, il ne se saisit plus. C'est le pivot dont tous les
-    // totaux se deduisent, et il vivait en champ libre au bas d'une carte
-    // qu'on parcourt : un doigt qui derape les decalait tous.
+    // The odometer is read, it is no longer typed. It is the pivot every total
+    // is derived from, and it used to live as an open field at the bottom of a
+    // card one scrolls through: a slipping finger shifted them all.
     if (Number.isFinite(Number(attrs.odometer))) {
       const s = document.createElement("div");
       s.className = "s";
@@ -4493,15 +4507,15 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * Le menu de la carte : ce qui ne vise aucun train.
+   * The card's menu: what aims at no set.
    *
-   * Ajouter un train et regler le vehicule tenaient en bas de la carte, vus a
-   * chaque coup d'oeil et servis deux fois par an. Ils passent derriere un
-   * point d'entree unique, la ou Home Assistant met les siens.
+   * Adding a set and configuring the vehicle sat at the bottom of the card,
+   * seen at every glance and used twice a year. They move behind a single way
+   * in, where Home Assistant puts its own.
    *
-   * Peint dans le portail et non dans la carte, pour la meme raison que la
-   * feuille : un menu en position fixe pose sous un ancetre transforme se
-   * placerait de travers.
+   * Painted in the portal and not in the card, for the same reason as the
+   * sheet: a fixed-position menu laid under a transformed ancestor would place
+   * itself askew.
    */
   #openMenu(anchor, attrs) {
     const root = this.#openPortal();
@@ -4514,13 +4528,13 @@ class TyresCard extends HTMLElement {
     menu.setAttribute("role", "menu");
 
     const close = () => {
-      // Les ecouteurs partent toujours, meme si la couche a deja disparu — un
-      // menu emporte par la deconnexion de la carte les laisserait derriere.
+      // The listeners always go, even if the layer has already gone — a menu
+      // carried off by the card being disconnected would leave them behind.
       removeEventListener("scroll", onScroll, true);
       removeEventListener("resize", close);
-      // Une fermeture peut arriver deux fois : par le clic, puis par le
-      // defilement que ce clic a declenche. La seconde ne doit pas voler le
-      // focus a ce que la premiere vient d'ouvrir.
+      // A close can happen twice: through the click, then through the scroll
+      // that click triggered. The second must not steal the focus from what
+      // the first has just opened.
       if (!layer.isConnected) return;
       layer.remove();
       this.#idlePortal();
@@ -4535,21 +4549,21 @@ class TyresCard extends HTMLElement {
       event.stopPropagation();
       if (event.key === "Escape") close();
     });
-    /* Le menu est place au pixel sous son bouton : ce qui deplace le bouton le
-       laisserait pointer a cote, donc on referme.
+    /* The menu is placed to the pixel under its button: whatever moves the
+       button would leave it pointing beside it, so we close.
 
-       Deux precautions, et elles ne sont pas de confort. Le defilement est
-       ecoute en capture, donc n'importe quel conteneur de la page le declenche
-       — y compris celui d'un dialogue. Or la carte s'ouvre en dialogue depuis
-       la pastille du plan : donner le focus a la premiere entree du menu, qui
-       vit hors de la boite, fait rappeler ce focus par le dialogue et defiler
-       son contenu. Le menu se refermait dans la seconde qui suivait son
-       ouverture, ce qui se voit exactement comme un menu qui ne s'ouvre pas.
+       Two precautions, and they are not for comfort. Scrolling is listened to
+       on the capture phase, so any container in the page triggers it —
+       including a dialog's. Now the card opens as a dialog from the floor-plan
+       badge: giving focus to the menu's first entry, which lives outside the
+       box, makes the dialog recall that focus and scroll its content. The menu
+       closed within the second following its opening, which looks exactly like
+       a menu that does not open.
 
-       Donc : on n'ecoute qu'a partir de l'image suivante, le temps que ce
-       remue-menage retombe, et on ne referme que si le bouton a reellement
-       bouge. C'est la condition qu'on voulait depuis le debut — le reste
-       n'etait qu'une approximation par le defilement. */
+       So: we only listen from the next frame on, long enough for that
+       commotion to settle, and we only close if the button has actually moved.
+       That is the condition we wanted all along — the rest was only an
+       approximation by way of scrolling. */
     const anchored = anchor.getBoundingClientRect();
     const onScroll = () => {
       if (!layer.isConnected) return removeEventListener("scroll", onScroll, true);
@@ -4599,8 +4613,8 @@ class TyresCard extends HTMLElement {
     );
     item(t("sheet.settings"), "mdi:car-cog", () => this.#settings());
     rule();
-    // Un compteur nourri par un capteur ne se corrige pas a la main : la ligne
-    // le dit, et ne s'ouvre sur rien.
+    // An odometer fed by a sensor is not corrected by hand: the row says so,
+    // and opens onto nothing.
     if (attrs.odometer_auto === true) {
       item(t("card.odometer_menu"), "mdi:counter", null, t("card.automatic"));
     } else {
@@ -4613,8 +4627,8 @@ class TyresCard extends HTMLElement {
     root.appendChild(layer);
     anchor.setAttribute("aria-expanded", "true");
 
-    // Place apres coup : la largeur du menu depend de ses libelles, et son
-    // debordement en bas d'ecran ne se connait qu'une fois mesure.
+    // Placed afterwards: the menu's width depends on its labels, and its
+    // overflow at the bottom of the screen is only known once measured.
     const a = anchor.getBoundingClientRect();
     const m = menu.getBoundingClientRect();
     const gap = 4;
@@ -4627,19 +4641,19 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * Mettre le compteur a jour.
+   * Bringing the odometer up to date.
    *
-   * En feuille, et non en champ ouvert sur la carte : le chiffre decale tous
-   * les totaux, et le composant refuse d'ailleurs une valeur inferieure a la
-   * derniere — autant que la saisie soit un geste, pas un frolement.
+   * In a sheet, and not as a field open on the card: the figure shifts every
+   * total, and the component refuses a value below the last one anyway — better
+   * the entry be a gesture than a brush of the hand.
    *
-   * Le geste courant n'est pas une correction de quelques kilometres, c'est un
-   * releve : on lit le tableau de bord et on reporte. D'ou trois facons
-   * d'arriver au nombre, dans l'ordre ou elles servent — le champ ouvert sur
-   * sa valeur deja selectionnee, pour taper le releve par-dessus ; les bonds
-   * de cent, cinq cents et mille, pour le rattrapage a vue ; et les fleches du
-   * champ, passees a dix, pour l'ajustement fin. Un pas de un ne servait
-   * qu'a ce dernier cas et faisait tout le reste a la main.
+   * The ordinary gesture is not a correction of a few kilometres, it is a
+   * reading: one looks at the dashboard and copies it over. Hence three ways of
+   * arriving at the number, in the order they serve — the field open on its
+   * value already selected, to type the reading over it; the leaps of a
+   * hundred, five hundred and a thousand, for catching up by eye; and the
+   * field's arrows, set to ten, for fine adjustment. A step of one served only
+   * that last case and did all the rest by hand.
    */
   #askOdometer(attrs) {
     const card = this;
@@ -4651,8 +4665,8 @@ class TyresCard extends HTMLElement {
       key: "odometer",
       live: false,
       paint(sheet) {
-        // Refaite a chaque peinture, mais nommee avant : les bonds l'appellent
-        // et sont construits plus haut qu'elle.
+        // Rebuilt at every paint, but named before: the leaps call it and are
+        // built above it.
         let sync;
         sheet.appendChild(
           sheetHead({
@@ -4675,8 +4689,8 @@ class TyresCard extends HTMLElement {
         input.type = "number";
         input.className = "tx";
         input.inputMode = "numeric";
-        // Dix, et non un : les fleches servent a l'ajustement, jamais au
-        // releve — celui-ci se tape ou se prend aux bonds ci-dessous.
+        // Ten, and not one: the arrows are for adjustment, never for the
+        // reading — that is typed, or taken from the leaps below.
         input.step = "10";
         if (from !== null) input.min = String(from);
         input.value = start;
@@ -4705,9 +4719,9 @@ class TyresCard extends HTMLElement {
         }
         field.appendChild(jumps);
 
-        // L'ecart, plutot que le seul total. C'est lui qu'on verifie apres
-        // avoir tape — un chiffre de six caracteres se relit mal, un « +1 200
-        // km » se reconnait tout de suite comme la distance qu'on a faite.
+        // The difference, rather than the total alone. It is what one checks after
+        // typing — a six-character figure is hard to reread, a "+1,200 km" is
+        // recognised at once as the distance one has covered.
         const gap = document.createElement("p");
         gap.className = "hp";
         field.appendChild(gap);
@@ -4716,9 +4730,9 @@ class TyresCard extends HTMLElement {
         const save = actButton(t("act.save"), null, "primary", () => {
           const value = Number(input.value);
           if (!Number.isFinite(value) || (from !== null && value < from)) return;
-          // La feuille ne se referme qu'une fois le releve accepte. Elle refuse
-          // deja un chiffre qui recule, mais c'est le composant qui tranche —
-          // et s'il refuse, la valeur tapee doit rester sous les yeux.
+          // The sheet only closes once the reading has been accepted. It refuses a
+          // figure going backwards already, but it is the component that decides —
+          // and if it refuses, the typed value has to stay in front of one's eyes.
           card.setOdometer(value).then(
             () => card.dropScreen(screen, t("msg.odometer_saved")),
             () => {}
@@ -4746,9 +4760,9 @@ class TyresCard extends HTMLElement {
         sheet.appendChild(
           sheetFoot([actButton(t("act.cancel"), null, "", () => card.dropScreen(screen)), save])
         );
-        // La feuille s'ouvre sur le champ, valeur selectionnee : c'est la seule
-        // chose qu'elle demande, et le releve se tape par-dessus sans avoir a
-        // effacer six chiffres.
+        // The sheet opens on the field, value selected: it is the only thing it
+        // asks for, and the reading is typed over it without having to erase six
+        // digits.
         queueMicrotask(() => {
           input?.focus();
           input?.select();
@@ -4758,12 +4772,12 @@ class TyresCard extends HTMLElement {
     this.pushScreen(screen);
   }
 
-  /** Le service, depuis la feuille du compteur. */
+  /** The service, from the odometer sheet. */
   setOdometer(value) {
     return this.#call("set_odometer", { odometer: value });
   }
 
-  /** Les reglages du vehicule : son nom, son compteur, son rappel. */
+  /** The vehicle's settings: its name, its odometer, its reminder. */
   #settings() {
     const entryId = this.#entryId();
     if (!entryId) {
@@ -4779,12 +4793,12 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * La feuille de « deux relevés se contredisent », sur un flux deja ouvert.
+   * The "two readings contradict each other" sheet, on a flow already open.
    *
-   * La question ne vient pas d'un geste : elle nait d'un capteur qui lit moins
-   * que ce qui a ete compte, et le flux la pose au moment ou l'on croyait en
-   * avoir fini. Elle a donc sa feuille a elle, et ce qui restait a enregistrer
-   * attend qu'on y ait repondu.
+   * The question does not come from a gesture: it is born of a sensor reading
+   * less than what has been counted, and the flow asks it just when one thought
+   * one had finished. It therefore has a sheet of its own, and what was left to
+   * save waits until it has been answered.
    */
   pushResync(flow, after) {
     const screen = new FormScreen(this, {
@@ -4797,12 +4811,11 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * La page de l'integration.
+   * The integration's page.
    *
-   * Ajouter un second vehicule s'y passe, et pas ici : une carte est liee a
-   * une voiture, elle ne peut pas en creer une autre sans mentir sur ce
-   * qu'elle montre. Mais elle dit ou cela se fait, ce qui manquait pour le
-   * trouver.
+   * Adding a second vehicle happens there, and not here: a card is bound to one
+   * car, it cannot create another without lying about what it shows. But it
+   * says where that is done, which was what was missing to find it.
    */
   goToIntegration() {
     performAction(
@@ -4814,11 +4827,12 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * Les quatre coins, quand des capteurs y sont attaches.
+   * The four corners, when sensors are attached to them.
    *
-   * Le composant les rend deja resolus par coin : un capteur appartient au
-   * train, mais une paire montee a l'arriere lit a l'arriere, et c'est le
-   * vehicule qui sait ou elle est. La carte n'a donc rien a recalculer.
+   * The component hands them over already resolved by corner: a sensor belongs
+   * to the set, but a pair fitted at the rear reads at the rear, and it is the
+   * vehicle that knows where it is. The card therefore has nothing to work out
+   * again.
    */
   #pressures(attrs) {
     const byCorner = attrs.pressures ?? {};
@@ -4835,8 +4849,8 @@ class TyresCard extends HTMLElement {
 
       const label = document.createElement("span");
       label.className = "corner";
-      // Le repli passe par la table des coins : la cle brute « front_left »
-      // n'est pas un mot, et la pastille de plan fait deja ce choix.
+      // The fallback goes through the corner table: the raw key "front_left" is
+      // not a word, and the floor-plan badge makes that choice already.
       label.textContent = read.label ?? CORNER_LABELS[corner] ?? corner;
 
       const value = document.createElement("span");
@@ -4846,8 +4860,8 @@ class TyresCard extends HTMLElement {
 
       cell.append(label, value);
 
-      // La pression est la donnee ; le reste est du contexte. Un seul
-      // emplacement a droite, et c'est le plus urgent qui l'occupe.
+      // The pressure is the datum; the rest is context. One slot on the right,
+      // and the most urgent thing takes it.
       const aside = this.#wheelAside(read);
       if (aside) cell.appendChild(aside);
 
@@ -4865,18 +4879,18 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * Le second membre d'une cellule de roue.
+   * The second member of a wheel cell.
    *
-   * La roue arrive avec quatre valeurs — pression, temperature, pile, date du
-   * dernier releve — et la carte n'en montrait qu'une seule en plus de la
-   * pression, la temperature, avec un « °C » suppose alors que la pression,
-   * elle, lit son unite.
+   * The wheel arrives with four values — pressure, temperature, battery, date
+   * of the last reading — and the card showed only one of them besides the
+   * pressure, the temperature, with an assumed "°C" when the pressure, for its
+   * part, reads its own unit.
    *
-   * L'ordre ci-dessous est celui de l'urgence. Un capteur muet passe devant
-   * tout : sa pression est un souvenir. Une pile faible vient ensuite — c'est
-   * l'avertissement qui permet d'agir avant le silence, et il etait jete. La
-   * temperature ne vient qu'apres : elle ne se lit pas pour elle-meme, elle
-   * explique une pression basse un matin froid.
+   * The order below is that of urgency. A silent sensor comes before
+   * everything: its pressure is a memory. A low battery comes next — it is the
+   * warning that allows acting before the silence, and it was thrown away. The
+   * temperature comes only after: it is not read for itself, it explains a low
+   * pressure on a cold morning.
    */
   #wheelAside(read) {
     const say = (text, icon, tone) => {
@@ -4887,16 +4901,16 @@ class TyresCard extends HTMLElement {
       return el;
     };
 
-    // Le pneu appele faux passe devant tout, tant que la lecture est
-    // d'aujourd'hui : c'est l'information qui empeche de prendre la route.
-    // Muet, le silence reprend la main — l'alarme, comme la pression, date
-    // d'avant, et la cellule rouge dit deja ce qu'il reste a dire.
+    // The tyre called wrong comes before everything, as long as the reading
+    // is today's: it is the information that stops one taking the road.
+    // Silent, silence takes over — the alarm, like the pressure, is old,
+    // and the red cell says already what is left to say.
     if (read.alarm && !read.stale) {
       return say(t("card.alarm_aside"), "mdi:car-tire-alert", "danger");
     }
     if (read.stale) {
       const since = sinceLabel(read.last_seen);
-      // « 3 j » seul ne dirait pas de quoi il s'agit a cote d'une pression.
+      // "3 d" on its own would not say what it is about beside a pressure.
       return say(
         since ? t("card.mute_for", { since }) : t("card.mute"),
         "mdi:alert-outline",
@@ -4907,8 +4921,8 @@ class TyresCard extends HTMLElement {
       return say(`${Math.round(Number(read.battery))} %`, "mdi:battery-alert-variant-outline", "alarm");
     }
     if (read.temperature != null) {
-      // L'unite vient du capteur. « °C » etait ecrit quoi qu'il arrive, ce qui
-      // affichait « 64 °C » pour une sonde en Fahrenheit.
+      // The unit comes from the sensor. "°C" was written whatever happened,
+      // which displayed "64 °C" for a probe reporting Fahrenheit.
       return say(`${trim(read.temperature)} ${read.temperature_unit ?? "°C"}`.trim(), null, "");
     }
     return null;
@@ -4937,9 +4951,9 @@ class TyresCard extends HTMLElement {
     k.textContent = set ? km(set.km) : "—";
     const r = document.createElement("div");
     r.className = "ref";
-    // Le label d'abord, comme partout : l'aide du champ promet qu'il
-    // « remplace la référence à l'écran », et le capteur le sert deja
-    // desambiguise quand deux jeux partagent une reference.
+    // The label first, as everywhere: the field's help promises it
+    // "replaces the reference on screen", and the sensor serves it already
+    // disambiguated when two sets share a reference.
     r.appendChild(
       document.createTextNode(set ? nameOf(set) : t("card.no_set"))
     );
@@ -4948,8 +4962,8 @@ class TyresCard extends HTMLElement {
 
     txt.append(k, r);
 
-    // Un jeu monte sans date de montage — le cas d'un suivi repris ailleurs —
-    // n'a rien a dire ici : mieux vaut une ligne en moins qu'une ligne vide.
+    // A fitted set with no mount date — the case of a tracking taken over
+    // elsewhere — has nothing to say here: better one row fewer than an empty one.
     const said = set ? this.#since(set) : t("card.nothing_here");
     if (said) {
       const s = document.createElement("div");
@@ -4963,10 +4977,10 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * « Monté depuis le 12 avril », sans jamais afficher une date brute.
+   * "Fitted since 12 April", without ever showing a raw date.
    *
-   * La quantite de pneus s'y ajoutait autrefois ; elle est passee en icone sur
-   * la ligne du dessus, contre la reference qu'elle qualifie.
+   * The number of tyres used to be added to it; it has moved to an icon on the
+   * line above, against the reference it qualifies.
    */
   #since(set) {
     if (!set.mounted_since) return "";
@@ -4994,18 +5008,18 @@ class TyresCard extends HTMLElement {
     const name = document.createElement("div");
     name.className = "name";
     name.appendChild(document.createTextNode(nameOf(set)));
-    // La quantite se colle a la reference, qu'elle qualifie, plutot que de se
-    // noyer dans la ligne de metadonnees ou elle valait deux mots.
+    // The quantity sticks to the reference it qualifies, rather than drowning
+    // in the metadata line where it was worth two words.
     const qty = axleIcon(axleOf(set, attrs));
     if (qty) name.appendChild(qty);
     const meta = document.createElement("div");
     meta.className = "meta";
-    // Le code de date suit un jeu jusque dans l'archive : c'est au moment de
-    // remonter un jeu range depuis des annees qu'il pese le plus.
+    // The date code follows a set into the archive: it is at the moment of
+    // bringing back a set stored away for years that it weighs the most.
     const dot = dotLabel(set);
-    // Le cout au kilometre n'apparait qu'une fois le jeu assez roule pour que
-    // la division veuille dire quelque chose — le composant le tait avant.
-    // « 4 roues » quitte cette ligne : l'icone accolee au nom le dit deja.
+    // The cost per kilometre only shows once the set has run far enough for the
+    // division to mean something — the component keeps quiet before that.
+    // "4 wheels" leaves this line: the icon beside the name says it already.
     meta.textContent = set.retired
       ? [SEASONS[set.season]?.label, dot, cost(set), this.#retiredOn(set)]
           .filter(Boolean)
@@ -5029,9 +5043,9 @@ class TyresCard extends HTMLElement {
           : t("status.available");
     val.appendChild(st);
 
-    // Ce qui appelle une decision, la ou on regarde. Le composant calcule les
-    // deux depuis toujours : la permutation ne colorait qu'un bouton au fond
-    // d'une feuille, et l'age ne se lisait nulle part.
+    // What calls for a decision, where one is looking. The component has
+    // computed both all along: the rotation only coloured a button at the
+    // bottom of a sheet, and the age was read nowhere.
     for (const pill of this.#pills(set)) val.appendChild(pill);
 
     row.append(ic, mid, val);
@@ -5043,10 +5057,10 @@ class TyresCard extends HTMLElement {
     bar.appendChild(fill);
     row.appendChild(bar);
 
-    // Toute la ligne ouvre la feuille du train, y compris pour un jeu retire :
-    // sans cela il serait une impasse, et le remettre en service demanderait de
-    // passer par le flux de configuration. La ligne ne porte aucun bouton — un
-    // seul geste a apprendre, et quatre trains qui tiennent dans un ecran.
+    // The whole row opens the set's record, including for a retired set:
+    // without that it would be a dead end, and putting it back into service
+    // would mean going through the configuration flow. The row carries no
+    // button — one gesture to learn, and four sets fitting on one screen.
     row.setAttribute("role", "button");
     row.tabIndex = 0;
     const open = () => this.#openTrain(set.id);
@@ -5061,15 +5075,16 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * Les pastilles d'une ligne : ce qui demande un geste, et rien d'autre.
+   * A row's chips: what calls for a gesture, and nothing else.
    *
-   * « À permuter » et non « permutation due » : `rotation_due` ne devient vrai
-   * qu'une fois l'intervalle depasse, donc le moment est venu — mais la carte
-   * conseille, elle n'ordonne pas, et c'est deja le ton du bandeau meteo.
+   * "To rotate" and not "rotation due": `rotation_due` only becomes true once
+   * the interval has been passed, so the moment has come — but the card
+   * advises, it does not order, and that is already the tone of the weather
+   * banner.
    *
-   * Le chiffre qui justifie l'avis passe en infobulle. Le nom accessible, lui,
-   * reprend d'abord le libelle affiche : un `aria-label` qui ne contient pas
-   * le texte visible casse la commande vocale.
+   * The figure that justifies the advice moves into the tooltip. The accessible
+   * name, for its part, starts with the visible label: an `aria-label` that
+   * does not contain the visible text breaks voice control.
    */
   #pills(set) {
     const out = [];
@@ -5091,8 +5106,8 @@ class TyresCard extends HTMLElement {
         : null;
       pill(t("status.rotate_due"), "mdi:rotate-3d-variant", { title: since });
     }
-    // L'age d'un pneu ne se lit sur aucun compteur : il vieillit a l'arret, et
-    // c'est justement un jeu range qui vieillit sans qu'on y pense.
+    // A tyre's age is read on no counter: it ages standing still, and it is
+    // precisely a stored set that ages without anyone thinking about it.
     if (set.aged && Number.isFinite(Number(set.age_years))) {
       const years = Math.round(Number(set.age_years));
       const said =
@@ -5105,9 +5120,9 @@ class TyresCard extends HTMLElement {
     return out;
   }
 
-  /* « classé le … » et non « depuis le … » : la ligne voisine porte deja
-     « monté depuis », et deux « depuis » sur la meme rangee se liraient comme
-     la meme date. L'etat, lui, est dit par la pastille. */
+  /* "filed on …" and not "since …": the neighbouring line already carries
+     "fitted since", and two "since" on the same rank would read as the same
+     date. The status, for its part, is said by the chip. */
   #retiredOn(set) {
     if (!set.retired_at) return t("status.filed");
     const d = new Date(set.retired_at);
@@ -5125,18 +5140,18 @@ class TyresCard extends HTMLElement {
     return actButton(label, iconName, variant, onClick);
   }
 
-  /* ----- la fiche d'un train -----
+  /* ----- a set's record -----
 
-     Trois niveaux, et pas un de plus : la carte montre, la fiche agit, le
-     geste se confirme sur place. Ce qui suit est le deuxieme — il a remplace
-     la bande d'actions qui s'ouvrait dans la ligne, ou la place manquait au
-     point qu'il fallait cacher la moitie des verbes sous « … ».
+     Three levels, and not one more: the card shows, the record acts, the
+     gesture is confirmed on the spot. What follows is the second — it replaced
+     the strip of actions that opened inside the row, where room was so short
+     that half the verbs had to be hidden under "…".
 
-     Un quatrieme s'empile par-dessus quand il faut ecrire quelque chose : le
-     formulaire s'ouvre au-dessus de la fiche et la lui rend en se refermant.
-     C'est tout ce que la pile sert a faire. */
+     A fourth stacks on top when something has to be written: the form opens
+     above the record and hands it back on closing. That is all the stack is
+     for. */
 
-  /** Ouvre la fiche d'un train, sans geste en attente. */
+  /** Opens a set's record, with no gesture pending. */
   #openTrain(setId) {
     this.#mode = null;
     this.#arg = null;
@@ -5144,12 +5159,12 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * L'ecran d'un train.
+   * A set's screen.
    *
-   * Vivant tant qu'aucun geste n'attend d'etre confirme : ses kilometres
-   * avancent pendant qu'on le regarde, et c'est bien ce qu'on veut voir. Des
-   * qu'un encart de confirmation porte une saisie, il se fige — le repeindre
-   * effacerait le relevé qu'on est en train d'y taper.
+   * Live as long as no gesture is waiting to be confirmed: its kilometres
+   * advance while one looks at it, and that is exactly what one wants to see.
+   * As soon as a confirmation inset carries an input, it freezes — repainting
+   * it would wipe out the reading being typed into it.
    */
   #trainScreen(setId) {
     const card = this;
@@ -5161,8 +5176,8 @@ class TyresCard extends HTMLElement {
       paint(sheet) {
         const attrs = card.trainAttrs;
         const set = card.trainSet(setId);
-        // Un train supprime pendant que sa fiche etait ouverte : elle se
-        // referme plutot que de decrire une fiche qui n'existe plus.
+        // A set deleted while its record was open: it closes rather than
+        // describe a record that no longer exists.
         if (!set) {
           queueMicrotask(() => card.dropScreen(screen));
           return;
@@ -5187,7 +5202,7 @@ class TyresCard extends HTMLElement {
     return screen;
   }
 
-  /** Ce que la fiche montre sous son en-tete. */
+  /** What the record shows under its header. */
   paintTrainBody(sheet, set, attrs) {
     sheet.appendChild(this.#mode ? this.#confirm(set, attrs) : this.#verbs(set, attrs));
     for (const block of this.#blocks(set, attrs)) sheet.appendChild(block);
@@ -5206,21 +5221,21 @@ class TyresCard extends HTMLElement {
     return this.#set(setId);
   }
 
-  /** Met un geste en attente de confirmation, sans quitter la fiche. */
+  /** Puts a gesture up for confirmation, without leaving the record. */
   #ask(mode, arg = null) {
     this.#mode = mode;
     this.#arg = arg;
     this.repaintSheet(true);
   }
 
-  /** Le geste est parti : on referme, et ce qu'il change se lit sur la carte. */
+  /** The gesture is away: we close, and what it changes is read on the card. */
   #did(message) {
     this.#mode = null;
     this.#arg = null;
-    // Les fiches de train seulement, pas la pile entiere : la reponse du
-    // serveur peut arriver apres qu'une autre feuille s'est ouverte par-dessus,
-    // et elle n'a pas a l'emporter — c'est la regle que `dropScreen` s'est
-    // deja donnee.
+    // Set records only, not the whole stack: the server's reply may
+    // arrive after another sheet has opened on top, and it has no business
+    // carrying it away — that is the rule `dropScreen` has already given
+    // itself.
     for (const screen of [...this.#stack]) {
       if (String(screen.key).startsWith("train:")) this.dropScreen(screen);
     }
@@ -5228,20 +5243,21 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * Les verbes de l'etat ou se trouve le train.
+   * The verbs of the state the set is in.
    *
-   * Un etat, un verbe mis en avant : au garage on monte, sur la voiture on
-   * depose, a l'historique on remet en service. Le reste de la feuille ne
-   * porte que des liens, pour que ce bouton-la reste le geste du jour.
+   * One state, one verb brought forward: in the garage one fits, on the car one
+   * removes, in history one puts back into service. The rest of the sheet
+   * carries nothing but links, so that this one button stays the gesture of the
+   * day.
    */
   #verbs(set, attrs) {
     const el = document.createElement("div");
     el.className = "verbs";
     const on = axesOf(set);
-    // Strictement « pair », et non « pas all » : un essieu inconnu — vieux
-    // capteur — se traite comme un train de quatre, la regle prudente que
-    // `axleOf` s'est donnee. Le coordinateur tranche de toute facon d'apres
-    // la fiche reelle.
+    // Strictly "pair", and not "not all": an unknown axle — an old
+    // sensor — is treated as a set of four, the cautious rule `axleOf`
+    // has given itself. The coordinator decides from the real record
+    // in any case.
     const pair = axleOf(set, attrs) === "pair";
 
     if (set.retired) {
@@ -5251,9 +5267,9 @@ class TyresCard extends HTMLElement {
           "mdi:archive-arrow-up-outline",
           "primary",
           () => {
-            // `id` et non le libelle : le libelle est facultatif et deux
-            // fiches dupliquees peuvent le partager — l'id, lui, ne designe
-            // qu'un train, et `find()` cote Python le lit en premier.
+            // `id` and not the label: the label is optional and two duplicated
+            // records may share it — the id, for its part, designates one set
+            // only, and `find()` on the Python side reads it first.
             this.#run(
               "restore",
               { tyre_set: set.id },
@@ -5274,7 +5290,7 @@ class TyresCard extends HTMLElement {
         );
         return el;
       }
-      // L'essieu libre passe devant : c'est le montage qui ne depose rien.
+      // The free axle comes first: it is the fitting that removes nothing.
       const free = AXES.find((axis) => !fittedAt(attrs, axis)) ?? "front";
       for (const axis of AXES) {
         el.appendChild(
@@ -5290,8 +5306,8 @@ class TyresCard extends HTMLElement {
     }
 
     if (!pair) {
-      // Une permutation ne change aucun kilometrage : elle repart le rappel et
-      // fait suivre les capteurs de pression a leur roue.
+      // A rotation changes no mileage: it restarts the reminder and makes the
+      // pressure sensors follow their wheel.
       el.appendChild(
         this.#button(
           t("act.rotate"),
@@ -5329,11 +5345,11 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * L'encart de confirmation, a la place des verbes.
+   * The confirmation inset, in place of the verbs.
    *
-   * Il n'apparait que pour les gestes qui demandent une saisie ou qui defont
-   * autre chose — c'est le seul endroit ou la carte se permet une phrase, et
-   * c'est parce qu'elle y annonce une consequence.
+   * It only appears for the gestures that ask for an input or that undo
+   * something else — it is the only place where the card allows itself a
+   * sentence, and that is because it announces a consequence there.
    */
   #confirm(set, attrs) {
     const el = document.createElement("div");
@@ -5348,9 +5364,9 @@ class TyresCard extends HTMLElement {
 
     const cancel = this.#button(t("act.cancel"), null, "", () => this.#ask(null));
 
-    // Le compteur ne se demande que lorsqu'aucun capteur ne le donne. C'est la
-    // regle du flux, et c'est le dernier moment ou l'on peut dire a qui
-    // reviennent les derniers kilometres.
+    // The odometer is only asked for when no sensor gives it. That is the
+    // flow's rule, and it is the last moment at which one can say whom the
+    // last kilometres belong to.
     const auto = attrs.odometer_auto === true;
     let odo = null;
     const askOdo = () => {
@@ -5369,7 +5385,7 @@ class TyresCard extends HTMLElement {
       el.appendChild(row);
     };
     const reading = () => {
-      // Pas de `|| undefined` : un releve a 0 km est une valeur, pas un vide.
+      // No `|| undefined`: a reading at 0 km is a value, not an emptiness.
       if (!odo || odo.value.trim() === "") return undefined;
       const n = Number(odo.value);
       return Number.isFinite(n) ? n : undefined;
@@ -5471,8 +5487,8 @@ class TyresCard extends HTMLElement {
           this.#run(
             "unmount",
             {
-              // Un train de 4 libere les deux essieux : nommer le sien serait
-              // demander d'en deposer la moitie, ce qui n'existe pas.
+              // A set of 4 frees both axles: naming its own would be asking to remove
+              // half of it, which does not exist.
               position: axleOf(set, attrs) === "all" ? undefined : on[0],
               odometer: reading(),
             },
@@ -5485,8 +5501,8 @@ class TyresCard extends HTMLElement {
       return el;
     }
 
-    // Reste le montage. L'essieu vise est dans `#arg` — absent pour un train de
-    // quatre, qui prend les deux quoi qu'on demande.
+    // The fitting is left. The axle aimed at is in `#arg` — absent for a set of
+    // four, which takes both whatever is asked.
     const axis = this.#arg;
     say.append(
       document.createTextNode(
@@ -5496,9 +5512,9 @@ class TyresCard extends HTMLElement {
       )
     );
 
-    // Ce que ce montage defait. Un train de quatre prend les deux essieux, et
-    // peut donc en deposer deux d'un coup ; une paire ne vise que le sien.
-    // Les deux cas se disent avant, plutot que de se faire en silence.
+    // What this fitting undoes. A set of four takes both axles, and can
+    // therefore remove two at once; a pair aims only at its own. Both cases
+    // are said beforehand, rather than done in silence.
     const touched = axis ? [axis] : AXES;
     const leaving = [
       ...new Map(
@@ -5509,9 +5525,9 @@ class TyresCard extends HTMLElement {
       ).values(),
     ];
 
-    // Une voiture porte soit un train de quatre, soit deux paires — jamais un
-    // melange : poser une paire sur un train de quatre l'emporte tout entier,
-    // l'autre essieu compris.
+    // A car carries either a set of four or two pairs — never a mix: putting a
+    // pair on a set of four carries the whole of it away, the other axle
+    // included.
     const whole = axis && leaving.find((other) => axleOf(other, attrs) === "all");
     if (whole) {
       say.append(
@@ -5556,11 +5572,11 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * Les trois blocs, groupes par ce qu'ils touchent.
+   * The three blocks, grouped by what they touch.
    *
-   * Ce qui est ecrit sur le pneu, ce qui le mesure, ce qui le compte. Chacun
-   * dit son etat et n'offre qu'un verbe : c'est ce decoupage qui loge les
-   * capteurs de pression sans rallonger aucune liste de boutons.
+   * What is written on the tyre, what measures it, what counts it. Each says
+   * its state and offers one verb only: it is that division which houses the
+   * pressure sensors without lengthening any list of buttons.
    */
   #blocks(set, attrs) {
     const out = [];
@@ -5632,18 +5648,18 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * Le rare et le consequent, en fin de feuille.
+   * The rare and the consequential, at the end of the sheet.
    *
-   * Dupliquer, separer, classer, supprimer : quatre gestes qu'on fait une fois
-   * dans la vie d'un train. En liens et non en boutons — ils se lisent encore,
-   * mais on ne s'appuie pas dessus par megarde.
+   * Duplicate, separate, file away, delete: four gestures made once in a set's
+   * life. As links and not as buttons — they can still be read, but one does
+   * not lean on them by accident.
    */
   #more(set, attrs) {
     const el = document.createElement("div");
     el.className = "tmore";
 
-    // Dupliquer part d'une fiche existante : c'est ce a quoi ressemble le
-    // rachat de la meme reference, ou l'ajout d'une seconde paire identique.
+    // Duplicating starts from an existing record: that is what buying the same
+    // reference again looks like, or adding a second identical pair.
     el.appendChild(
       this.#link(t("sheet.duplicate"), "", () =>
         this.#openStep("duplicate", { setId: set.id, done: t("msg.duplicated") })
@@ -5672,10 +5688,10 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * La hauteur annoncee, en rangees de 50 px.
+   * The height announced, in rows of 50 px.
    *
-   * Elle etait constante : une carte d'un jeu et une carte de six pesaient
-   * pareil, et la mise en page en colonnes les equilibrait de travers.
+   * It used to be constant: a card of one set and a card of six weighed the
+   * same, and the column layout balanced them askew.
    */
   getCardSize() {
     const attrs = this.#seen?.[this.#config?.entity]?.attributes ?? {};
@@ -5685,9 +5701,9 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * La place dans une vue « sections », ou l'on pose une carte sur 1 a 12
-   * colonnes. Sans cela elle recevait un bloc par defaut et se redimensionnait
-   * mal — et c'est la disposition proposee par defaut depuis 2024.11.
+   * The place in a "sections" view, where a card sits on 1 to 12 columns.
+   * Without this it received a default block and resized badly — and that is
+   * the layout offered by default since 2024.11.
    */
   getGridOptions() {
     return {
@@ -5699,16 +5715,16 @@ class TyresCard extends HTMLElement {
   }
 }
 
-/* ---------- editeurs ---------- */
+/* ---------- editors ---------- */
 
 const ENTITY_SCHEMA = [
   { name: "entity", selector: { entity: { integration: "tyre_tracker", domain: "sensor" } } },
   { name: "advice_entity", selector: { entity: { domain: "binary_sensor" } } },
 ];
 
-/* Des fonctions et non des objets : un libelle fige au chargement du module
-   resterait dans la langue devinee alors, quand bien meme `hass` en annoncerait
-   une autre juste apres. */
+/* Functions and not objects: a label frozen when the module loads would stay
+   in the language guessed at that point, even if `hass` announced another one
+   just afterwards. */
 const BADGE_LABELS = () => ({
   entity: t("editor.entity"),
   advice_entity: t("editor.advice"),
@@ -5717,8 +5733,8 @@ const BADGE_LABELS = () => ({
 
 const CARD_LABELS = () => ({ ...BADGE_LABELS(), title: t("editor.title") });
 
-/* La grille des pressions n'appartient qu'a la pastille : la carte les montre
-   toujours, et avec le detail que la pastille n'a pas la place de porter. */
+/* The pressure grid belongs to the badge alone: the card always shows them,
+   and with the detail the badge has no room to carry. */
 defineEditor(
   "floor-tyres-badge-editor",
   [...ENTITY_SCHEMA, { name: "pressures", selector: { boolean: {} } }],
@@ -5730,11 +5746,11 @@ defineEditor(
   CARD_LABELS
 );
 
-/* ---------- enregistrement ---------- */
+/* ---------- registration ---------- */
 
-// Gardes contre le double chargement : une ressource Lovelace ajoutee a la
-// main en plus de celle de l'integration chargerait le module deux fois, et
-// un second `define` du meme nom tue le script entier.
+// Guards against double loading: a Lovelace resource added by hand on top of
+// the integration's would load the module twice, and a second `define` of the
+// same name kills the whole script.
 if (!customElements.get("floor-tyres-badge")) {
   customElements.define("floor-tyres-badge", FloorTyresBadge);
 }

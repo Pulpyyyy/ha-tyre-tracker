@@ -263,7 +263,9 @@
       "dot_invalid": "Un code DOT se lit deux chiffres de semaine, puis deux d'année — par exemple « 3223 ».",
       "axle_conflict": "Ce train est monté et l'autre essieu porte déjà autre chose : le passer à 4 roues en déclarerait six sur la voiture. Déposez d'abord l'autre train.",
       "replace_axle": "Remplacer met la copie exactement là où se trouve l'original : elle doit couvrir les mêmes roues. Pour changer le nombre de roues, ajoutez la copie sans remplacer, puis montez-la séparément.",
-      "vehicle_exists": "Un autre véhicule porte déjà ce nom."
+      "vehicle_exists": "Un autre véhicule porte déjà ce nom.",
+      "reference_required": "Donnez une référence aux pneus — ce qui est écrit sur le flanc, ou ce que vous demanderiez au comptoir.",
+      "tpms_duplicate": "Ce capteur est déjà sur une autre roue de ce train. Un capteur est vissé à une roue."
     },
     "abort": {
       "not_loaded": "Le véhicule n'est pas chargé pour le moment — corrigez ce que signale sa notification, puis revenez ici.",

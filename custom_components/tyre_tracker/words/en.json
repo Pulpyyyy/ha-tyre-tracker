@@ -39,7 +39,8 @@
     "mounted_at": "fitted at the {position}",
     "removed": "off the car",
     "retired": "in the history",
-    "history": "history"
+    "history": "history",
+    "bare": "No tyres"
   },
   "entry_title": {
     "template": "{article}{vehicle} tyres",

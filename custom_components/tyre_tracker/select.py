@@ -28,7 +28,7 @@ async def async_setup_entry(
 class TyreMountedSelect(TyreEntity, SelectEntity):
     """Which tyre set sits on one axle."""
 
-    _attr_icon = "mdi:car-tire-alert"
+    # The icon lives in `icons.json`, with every other fixed one.
 
     def __init__(self, coordinator: TyreCoordinator, position: str) -> None:
         """Set up the selector for one position."""
@@ -42,16 +42,27 @@ class TyreMountedSelect(TyreEntity, SelectEntity):
         self._attr_translation_key = f"mounted_{position}"
 
     @property
+    def _bare(self) -> str:
+        """What an axle carrying nothing is called.
+
+        An option and not an empty state: a select with no way back offers
+        every manoeuvre except the one a garage starts with, and taking the
+        wheels off would have meant reaching for a service call while the
+        selector that put them on sat right there.
+        """
+        return self.coordinator.words("status.bare")
+
+    @property
     def options(self) -> list[str]:
-        """Every set in service: a pair goes on either axle."""
-        return list(self.coordinator.options().values())
+        """Every set in service, and the choice of carrying none."""
+        return [self._bare, *self.coordinator.options().values()]
 
     @property
     def current_option(self) -> str | None:
-        """Label of the set on this axle."""
+        """Label of the set on this axle, or the bare axle."""
         set_id = self.coordinator.data.mounted.get(self._position)
         if set_id is None:
-            return None
+            return self._bare
         return self.coordinator.options().get(set_id)
 
     def _label(self) -> str:
@@ -77,5 +88,16 @@ class TyreMountedSelect(TyreEntity, SelectEntity):
         }
 
     async def async_select_option(self, option: str) -> None:
-        """Fit the chosen set to this axle."""
-        await self.coordinator.async_mount(option, position=self._position)
+        """Fit the chosen set to this axle, or take off what is there.
+
+        The sets are looked up before the bare choice is considered, rather
+        than after: a set may legitimately be labelled with the same word, and
+        the one thing worse than an unreachable option is one that quietly
+        does the opposite.
+        """
+        for set_id, label in self.coordinator.options().items():
+            if label == option:
+                await self.coordinator.async_mount(set_id, position=self._position)
+                return
+        if option == self._bare:
+            await self.coordinator.async_unmount(self._position)

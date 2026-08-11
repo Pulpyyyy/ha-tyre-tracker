@@ -213,8 +213,10 @@ class TyreSetSensor(TyreSetEntity, SensorEntity):
 class TyreMountedSensor(TyreEntity, SensorEntity):
     """The fitted set, and what it has run."""
 
+    # The icon lives in `icons.json`, with every other fixed one. Set here as
+    # well it would simply win, and the file would describe an entity it no
+    # longer decorates.
     _attr_translation_key = "current"
-    _attr_icon = "mdi:car-tire-alert"
 
     def __init__(self, coordinator: TyreCoordinator) -> None:
         """Set up the fitted-set sensor."""
@@ -253,7 +255,12 @@ class TyreMountedSensor(TyreEntity, SensorEntity):
         """Everything a card needs, in one read."""
         data = self.coordinator.data
         labels = self.coordinator.options()
-        pressures = self.coordinator.pressures()
+        # Built once and read twice: by corner just below, by set further down.
+        # A set of four is fitted to both positions, so asking for each view
+        # separately walked the same four sensors three times over — on a state
+        # write a connected car triggers every few seconds.
+        readings = self.coordinator.all_tpms()
+        pressures = self.coordinator.pressures(readings)
 
         fitted = {}
         for position in POSITIONS:
@@ -336,7 +343,7 @@ class TyreMountedSensor(TyreEntity, SensorEntity):
                     "price": tyre.price,
                     "cost_per_1000km": self.coordinator.cost_per_1000(tyre.set_id),
                     "storage": tyre.storage,
-                    "tpms": self.coordinator.tpms(tyre.set_id),
+                    "tpms": readings.get(tyre.set_id, {}),
                     "rotation_due": self.coordinator.rotation_due(tyre.set_id),
                     "km_since_rotation": self.coordinator.km_since_rotation(
                         tyre.set_id

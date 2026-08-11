@@ -17,8 +17,15 @@ from pathlib import Path
 
 from homeassistant.components.http import StaticPathConfig
 from homeassistant.core import HomeAssistant
+from homeassistant.loader import async_get_integration
 
-from ..const import CARD_FILENAME, INTEGRATION_VERSION, JSMODULES, URL_BASE
+from ..const import (
+    CARD_FILENAME,
+    DOMAIN,
+    FALLBACK_VERSION,
+    JSMODULES,
+    URL_BASE,
+)
 
 try:  # Home Assistant 2024.11 and later
     from homeassistant.components.lovelace.const import LOVELACE_DATA
@@ -34,6 +41,24 @@ class JSModuleRegistration:
         """Initialise the registrar."""
         self.hass = hass
         self.lovelace = hass.data.get(LOVELACE_DATA)
+        # Filled in by `_async_version`, which is the only caller that can
+        # await. Until then nothing here needs it.
+        self._version = FALLBACK_VERSION
+
+    async def _async_version(self) -> str:
+        """The version in the manifest, as Home Assistant already parsed it.
+
+        The card carries it as `?v=`, which is what makes an upgrade visible to
+        a browser holding the old module. Read from the loader rather than from
+        the file: the manifest is parsed once at discovery, and opening it again
+        would be disk I/O for a string that is already in memory.
+        """
+        try:
+            integration = await async_get_integration(self.hass, DOMAIN)
+        except Exception:  # noqa: BLE001 - a missing integration is not our problem
+            return FALLBACK_VERSION
+        self._version = str(integration.version or FALLBACK_VERSION)
+        return self._version
 
     @property
     def _mode(self) -> str:
@@ -50,6 +75,7 @@ class JSModuleRegistration:
     async def async_register(self) -> None:
         """Serve the files, then reference the modules in Lovelace."""
         await self._async_register_path()
+        version = await self._async_version()
 
         if self.lovelace is None:
             # Said out loud rather than passed over: without this, the card is
@@ -59,7 +85,7 @@ class JSModuleRegistration:
                 "url: %s/%s?v=%s , type: module",
                 URL_BASE,
                 CARD_FILENAME,
-                INTEGRATION_VERSION,
+                version,
             )
             return
 
@@ -69,7 +95,7 @@ class JSModuleRegistration:
                 "url: %s/%s?v=%s , type: module",
                 URL_BASE,
                 CARD_FILENAME,
-                INTEGRATION_VERSION,
+                version,
             )
             return
 
@@ -136,7 +162,7 @@ class JSModuleRegistration:
         ]
 
         for module in JSMODULES:
-            url = f"{URL_BASE}/{module['filename']}?v={INTEGRATION_VERSION}"
+            url = f"{URL_BASE}/{module['filename']}?v={self._version}"
             registered = False
 
             for resource in existing:

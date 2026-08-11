@@ -105,7 +105,7 @@ resources (storage mode). In YAML mode, add the resource by hand:
 ```yaml
 lovelace:
   resources:
-    - url: /tyre_tracker_frontend/tyres-card.js?v=1.0.0
+    - url: /tyre_tracker_frontend/tyres-card.js?v=1.0.1
       type: module
 ```
 

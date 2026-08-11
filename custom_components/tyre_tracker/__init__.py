@@ -18,6 +18,8 @@ setup — see frontend/__init__.py.
 
 from __future__ import annotations
 
+import logging
+
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import EVENT_HOMEASSISTANT_STARTED, Platform
 from homeassistant.core import CoreState, HomeAssistant, callback
@@ -29,6 +31,7 @@ from homeassistant.helpers.storage import Store
 from homeassistant.helpers.typing import ConfigType
 
 from .const import (
+    CONFIG_VERSION,
     CONF_INITIAL_ODOMETER,
     CONF_ODOMETER_ENTITY,
     CONF_ROTATION_INTERVAL,
@@ -43,6 +46,8 @@ from .const import (
 from .coordinator import TyreCoordinator
 from .frontend import JSModuleRegistration
 from .i18n import async_words
+
+_LOGGER = logging.getLogger(__name__)
 
 CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
@@ -96,6 +101,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: TyreConfigEntry) -> bool
     )
     await coordinator.async_load()
     entry.runtime_data = coordinator
+    # Registered the moment the coordinator starts listening, and not left to
+    # `async_unload_entry`: a setup that fails below never reaches that, and
+    # the odometer, TPMS and registry subscriptions would go on firing at a
+    # coordinator nothing holds any more.
+    entry.async_on_unload(coordinator.async_unload)
 
     # Nothing clears away a deleted set's device on its own: the record lives
     # in the options, and dropping it there would leave the device and its
@@ -134,12 +144,48 @@ async def async_remove_config_entry_device(
     return True
 
 
+async def async_migrate_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
+    """Refuse an entry this release cannot read, in a sentence.
+
+    Only the internal betas ever wrote a lower number, and their migrations
+    were dropped at release: there is nothing to convert such an entry from.
+    Without this, Home Assistant reports « Migration handler not found », which
+    says what is missing rather than what to do about it.
+
+    A higher number means a downgrade, which is refused for the opposite
+    reason: the options were written by a release that knew more than this one.
+    """
+    if entry.version < CONFIG_VERSION:
+        _LOGGER.error(
+            "tyre_tracker: %r was configured by a pre-release version "
+            "(schema %s, this release reads %s) and cannot be converted. "
+            "Delete the vehicle and add it again — the tyre sets have to be "
+            "re-declared, and their mileage typed back in from the totals "
+            "shown on their sensors",
+            entry.title,
+            entry.version,
+            CONFIG_VERSION,
+        )
+    else:
+        _LOGGER.error(
+            "tyre_tracker: %r was configured by a newer version (schema %s, "
+            "this release reads %s). Upgrade the integration again, or delete "
+            "the vehicle and add it back",
+            entry.title,
+            entry.version,
+            CONFIG_VERSION,
+        )
+    return False
+
+
 async def async_unload_entry(hass: HomeAssistant, entry: TyreConfigEntry) -> bool:
-    """Tear one vehicle down."""
-    unloaded = await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
-    if unloaded:
-        await entry.runtime_data.async_unload()
-    return unloaded
+    """Tear one vehicle down.
+
+    The coordinator lets go through the `async_on_unload` registered at setup,
+    which Home Assistant runs once the platforms are down — so a setup that
+    failed halfway is cleaned up by the same path as one that succeeded.
+    """
+    return await hass.config_entries.async_unload_platforms(entry, PLATFORMS)
 
 
 async def async_remove_entry(hass: HomeAssistant, entry: TyreConfigEntry) -> None:

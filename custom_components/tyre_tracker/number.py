@@ -50,8 +50,8 @@ async def async_setup_entry(
 class TyreOdometerNumber(TyreEntity, NumberEntity):
     """The vehicle's odometer."""
 
+    # The icon lives in `icons.json`, with every other fixed one.
     _attr_translation_key = "odometer"
-    _attr_icon = "mdi:counter"
     _attr_mode = NumberMode.BOX
     _attr_native_unit_of_measurement = UnitOfLength.KILOMETERS
     _attr_native_min_value = 0
@@ -91,8 +91,8 @@ class TyreSetTotalNumber(TyreSetEntity, NumberEntity):
     rather than a service call.
     """
 
+    # The icon lives in `icons.json`, with every other fixed one.
     _attr_translation_key = "total"
-    _attr_icon = "mdi:counter"
     _attr_mode = NumberMode.BOX
     _attr_native_unit_of_measurement = UnitOfLength.KILOMETERS
     _attr_native_min_value = 0

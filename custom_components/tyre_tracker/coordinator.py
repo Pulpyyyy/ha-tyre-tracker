@@ -401,29 +401,8 @@ class TyreCoordinator:
         # The pressures are read on demand, but nothing would redraw the card
         # when one moves: the sensors are outside this integration and its
         # entities have no reason to write their state again.
-        watched = sorted(
-            {
-                entity
-                for tyre in sets.values()
-                for entity in tyre.tpms.values()
-                if entity
-            }
-        )
-        if watched:
-            # The alarm a dock publishes beside its pressure moves on its own
-            # schedule: watched too, or a flat flagged by the TPMS itself
-            # would wait for the pressure figure to move before anything
-            # redrew or any automation heard of it.
-            alarms = sorted(
-                {
-                    alarm
-                    for entity in watched
-                    if (alarm := self._companions(entity).get("alarm"))
-                }
-            )
-            self._unsub_tpms = async_track_state_change_event(
-                self.hass, [*watched, *alarms], self._tpms_changed
-            )
+        self._watch_tpms()
+        if self._unsub_tpms is not None:
             # The cached siblings are only true as long as the registry says so:
             # a sensor moved to another device, or a temperature entity enabled
             # after the fact, changes what a wheel reads.
@@ -461,16 +440,10 @@ class TyreCoordinator:
         mounted_at = tyre.mounted_at if tyre is not None else record.get(DATA_MOUNTED_AT)
         run = 0.0
         if mounted_at is not None and self.data.odometer is not None:
-            run = max(0.0, self.data.odometer - mounted_at)
-            if run > MAX_STEP_KM:
-                _LOGGER.warning(
-                    "tyre_tracker %s: %s km credited to %r in one go — mount "
-                    "odometer is almost certainly wrong, nothing added",
-                    self.vehicle,
-                    round(run),
-                    tyre.title if tyre is not None else sid,
-                )
-                run = 0.0
+            run = self._credit(
+                tyre.title if tyre is not None else sid,
+                max(0.0, self.data.odometer - mounted_at),
+            )
 
         if tyre is not None:
             tyre.total = round(tyre.total + run, 1)
@@ -618,6 +591,32 @@ class TyreCoordinator:
             return 0.0
         return max(0.0, self.data.odometer - tyre.mounted_at)
 
+    def _credit(self, name: str, run: float) -> float:
+        """The kilometres a settlement may add, refusing an absurd figure.
+
+        Every manoeuvre that closes a count comes through here, so the rule is
+        written once: retiring a set used to be the one path without it, and a
+        wrong mount odometer settled there would have been added in full.
+        """
+        if run <= MAX_STEP_KM:
+            return run
+        _LOGGER.warning(
+            "tyre_tracker %s: %s km credited to %r in one go — mount odometer "
+            "is almost certainly wrong, nothing added",
+            self.vehicle,
+            round(run),
+            name,
+        )
+        return 0.0
+
+    def _settle(self, tyre: TyreSet) -> float:
+        """Close a fitted set's count, and hand back what it just ran."""
+        run = self._credit(tyre.title, self._rolling(tyre))
+        tyre.total = round(tyre.total + run, 1)
+        tyre.mounted_at = None
+        tyre.mounted_since = None
+        return round(run, 1)
+
     def cost_per_1000(self, set_id: str) -> float | None:
         """What a thousand kilometres cost on this set.
 
@@ -720,12 +719,27 @@ class TyreCoordinator:
             out[slot] = reading
         return out
 
-    def pressures(self) -> dict[str, dict]:
+    def all_tpms(self) -> dict[str, dict[str, dict]]:
+        """Every set's readings, by set then by slot, each built once.
+
+        The card wants both views — by set for the shelf, by corner for the
+        car — and a set of four is fitted to both positions, so the naive
+        reading rebuilt the same four sensors three times over. Every reading
+        goes through the state machine and the target comparison, on a state
+        write that a connected car triggers every few seconds.
+        """
+        return {set_id: self.tpms(set_id) for set_id in self.data.sets}
+
+    def pressures(
+        self, readings: dict[str, dict[str, dict]] | None = None
+    ) -> dict[str, dict]:
         """What each corner of the car reads, from whatever is fitted to it.
 
         The sets hold the sensors; the car has the corners. This is where the
         two meet — a pair's left tyre is the front left or the rear left
         depending on the axle it was fitted to, and only the car knows which.
+
+        `readings` is what `all_tpms` already built, when the caller holds it.
         """
         out: dict[str, dict] = {}
         for position in POSITIONS:
@@ -733,7 +747,9 @@ class TyreCoordinator:
             tyre = self.data.sets.get(set_id) if set_id else None
             if tyre is None:
                 continue
-            for slot, reading in self.tpms(tyre.set_id).items():
+            if readings is None or (slots := readings.get(tyre.set_id)) is None:
+                slots = self.tpms(tyre.set_id)
+            for slot, reading in slots.items():
                 corner = slot if tyre.axle == AXLE_ALL else CORNER_OF.get(
                     (position, slot)
                 )
@@ -787,7 +803,7 @@ class TyreCoordinator:
         # for a week is a sensor doing its job, and reading the moment the
         # figure last moved would file it as dead. What is wanted is the moment
         # it last spoke, which is exactly what a dead cell stops doing.
-        state = self.hass.states.get(found.get("pressure", entity_id))
+        state = self.hass.states.get(found["pressure"])
         heard = state.last_reported if state else None
         out["last_seen"] = heard.isoformat() if heard else None
         out["available"] = bool(state and state.state not in ("unknown", "unavailable"))
@@ -809,35 +825,66 @@ class TyreCoordinator:
         return found
 
     def _resolve_companions(self, entity_id: str) -> dict[str, str]:
-        """Walk the registry for what sits beside a pressure sensor."""
-        wanted = {
-            SensorDeviceClass.PRESSURE: "pressure",
-            SensorDeviceClass.TEMPERATURE: "temperature",
-            SensorDeviceClass.BATTERY: "battery",
-        }
-        found: dict[str, str] = {}
+        """Walk the registry for what sits beside a pressure sensor.
+
+        The chosen entity *is* the pressure, always: it was picked wheel by
+        wheel and nothing found here may displace it. A dock that publishes all
+        four wheels under one device carries four pressure sensors, and taking
+        the first one the registry hands back made every corner read the same
+        tyre — the one that happened to be registered first.
+
+        The siblings are a convenience, not a second source. They are only
+        looked for on a device carrying a single pressure sensor: where there
+        are several, a temperature or a battery on that device belongs to a
+        wheel nobody can name, and reading it under this one would be worse
+        than showing nothing.
+        """
+        found: dict[str, str] = {"pressure": entity_id}
 
         registry = er.async_get(self.hass)
         entry = registry.async_get(entity_id)
-        if entry is not None and entry.device_id:
+        if entry is None or not entry.device_id:
+            return found
+
+        siblings = [
+            other
             for other in er.async_entries_for_device(
                 registry, entry.device_id, include_disabled_entities=False
-            ):
-                # A dock usually publishes its verdict beside the figure — a
-                # `problem` entity per wheel. Found, not asked for, exactly
-                # like the temperature: it costs nothing to declare.
-                if other.domain == "binary_sensor":
-                    device_class = other.device_class or other.original_device_class
-                    if device_class == "problem" and "alarm" not in found:
-                        found["alarm"] = other.entity_id
-                    continue
-                key = wanted.get(other.device_class or other.original_device_class)
-                if key and key not in found:
-                    found[key] = other.entity_id
+            )
+            if other.entity_id != entity_id
+        ]
 
-        # No registry entry, or a device that carries nothing else: whatever
-        # was chosen is read as the pressure, which is what it was chosen for.
-        found.setdefault("pressure", entity_id)
+        def _class(item: er.RegistryEntry) -> str | None:
+            """What the entity says it measures, the user's word first."""
+            return item.device_class or item.original_device_class
+
+        # One device, one wheel, or nothing can be attributed. A gateway
+        # exposing the whole car is served by its own per-wheel entities and by
+        # the target pressures in the set's record — never by a guess.
+        if any(
+            other.domain == "sensor" and _class(other) == SensorDeviceClass.PRESSURE
+            for other in siblings
+        ):
+            return found
+
+        wanted = {
+            SensorDeviceClass.TEMPERATURE: "temperature",
+            SensorDeviceClass.BATTERY: "battery",
+        }
+        for other in siblings:
+            # A dock usually publishes its verdict beside the figure — a
+            # `problem` entity per wheel. Found, not asked for, exactly like
+            # the temperature: it costs nothing to declare.
+            if other.domain == "binary_sensor":
+                if _class(other) == "problem" and "alarm" not in found:
+                    found["alarm"] = other.entity_id
+                continue
+            if other.domain != "sensor":
+                continue
+            key = wanted.get(_class(other))
+            if key and key not in found:
+                found[key] = other.entity_id
+
         return found
 
     def _target_for(self, tyre: TyreSet, slot: str) -> float | None:
@@ -999,20 +1046,7 @@ class TyreCoordinator:
             outgoing = self.data.sets.get(sid)
             if outgoing is None:
                 continue
-            run = self._rolling(outgoing)
-            if run > MAX_STEP_KM:
-                _LOGGER.warning(
-                    "tyre_tracker %s: %s km credited to %r in one go — mount "
-                    "odometer is almost certainly wrong, nothing added",
-                    self.vehicle,
-                    round(run),
-                    outgoing.title,
-                )
-                run = 0.0
-            outgoing.total = round(outgoing.total + run, 1)
-            outgoing.mounted_at = None
-            outgoing.mounted_since = None
-            added[sid] = round(run, 1)
+            added[sid] = self._settle(outgoing)
 
         # Only stamp a start when the set was not already running elsewhere:
         # fitting a front set to the rear as well must not restart its count.
@@ -1020,15 +1054,13 @@ class TyreCoordinator:
             incoming.mounted_at = self.data.odometer
             incoming.mounted_since = now.isoformat()
 
-        self.data.history.append(
-            {
-                "at": now.isoformat(),
-                "to": incoming.set_id,
-                "positions": targets,
-                "from": {p: before.get(p) for p in POSITIONS},
-                "odometer": self.data.odometer,
-                "added": added,
-            }
+        self._remember(
+            EVENT_MOUNTED,
+            incoming.set_id,
+            at=now.isoformat(),
+            positions=targets,
+            previous={p: before.get(p) for p in POSITIONS},
+            added=added,
         )
 
         await self._async_save()
@@ -1106,30 +1138,15 @@ class TyreCoordinator:
             tyre = self.data.sets.get(sid)
             if tyre is None:
                 continue
-            run = self._rolling(tyre)
-            if run > MAX_STEP_KM:
-                _LOGGER.warning(
-                    "tyre_tracker %s: %s km credited to %r in one go — mount "
-                    "odometer is almost certainly wrong, nothing added",
-                    self.vehicle,
-                    round(run),
-                    tyre.title,
-                )
-                run = 0.0
-            tyre.total = round(tyre.total + run, 1)
-            tyre.mounted_at = None
-            tyre.mounted_since = None
-            self.data.history.append(
-                {
-                    "at": now.isoformat(),
-                    "from": sid,
-                    "positions": slots,
-                    "odometer": self.data.odometer,
-                    "added": round(run, 1),
-                    "unmounted": True,
-                }
+            run = self._settle(tyre)
+            self._remember(
+                EVENT_UNMOUNTED,
+                sid,
+                at=now.isoformat(),
+                positions=slots,
+                added={sid: run},
             )
-            settled.append((tyre, round(run, 1)))
+            settled.append((tyre, run))
 
         await self._async_save()
         self._notify()
@@ -1158,23 +1175,20 @@ class TyreCoordinator:
         # since it was fitted belong to it. The positions it held are left
         # empty rather than filled at random — the car is on jacks, and only
         # the owner knows what goes back on.
+        run = 0.0
         if self.is_mounted(tyre.set_id):
-            tyre.total = round(tyre.total + self._rolling(tyre), 1)
-            tyre.mounted_at = None
-            tyre.mounted_since = None
+            run = self._settle(tyre)
             for position in self.positions_of(tyre.set_id):
                 self.data.mounted[position] = None
 
         tyre.retired_at = dt_util.utcnow().isoformat()
         tyre.retired_odometer = self.data.odometer
 
-        self.data.history.append(
-            {
-                "at": tyre.retired_at,
-                "from": tyre.set_id,
-                "odometer": self.data.odometer,
-                "retired": True,
-            }
+        self._remember(
+            EVENT_RETIRED,
+            tyre.set_id,
+            at=tyre.retired_at,
+            added={tyre.set_id: run},
         )
 
         await self._async_save()
@@ -1224,14 +1238,8 @@ class TyreCoordinator:
         tyre.rotated_at = dt_util.utcnow().isoformat()
         tyre.rotated_odometer = self.data.odometer
 
-        self.data.history.append(
-            {
-                "at": tyre.rotated_at,
-                "from": tyre.set_id,
-                "odometer": self.data.odometer,
-                "rotated": True,
-                "after": since,
-            }
+        self._remember(
+            EVENT_ROTATED, tyre.set_id, at=tyre.rotated_at, after=since
         )
 
         await self._async_save()
@@ -1256,9 +1264,7 @@ class TyreCoordinator:
         for tyre in self.data.sets.values():
             if not self.is_mounted(tyre.set_id):
                 continue
-            run = self._rolling(tyre)
-            if run > MAX_STEP_KM:
-                run = 0.0
+            run = self._credit(tyre.title, self._rolling(tyre))
             tyre.total = round(tyre.total + run, 1)
             tyre.mounted_at = value
         self.data.odometer = value
@@ -1301,16 +1307,7 @@ class TyreCoordinator:
 
         # Close the count once, on the set as it still is. What the four
         # wheels ran together is the figure both pairs carry away.
-        run = self._rolling(tyre)
-        if run > MAX_STEP_KM:
-            _LOGGER.warning(
-                "tyre_tracker %s: %s km credited to %r in one go — mount "
-                "odometer is almost certainly wrong, nothing added",
-                self.vehicle,
-                round(run),
-                tyre.title,
-            )
-            run = 0.0
+        run = self._credit(tyre.title, self._rolling(tyre))
         shared = round(tyre.total + run, 1)
         tyre.total = shared
 
@@ -1343,16 +1340,13 @@ class TyreCoordinator:
             DATA_ROTATED_ODOMETER: tyre.rotated_odometer,
         }
 
-        self.data.history.append(
-            {
-                "at": now.isoformat(),
-                "from": set_id,
-                "to": new_id,
-                "positions": [pair],
-                "odometer": self.data.odometer,
-                "added": round(run, 1),
-                "separated": True,
-            }
+        self._remember(
+            EVENT_SEPARATED,
+            set_id,
+            at=now.isoformat(),
+            positions=[pair],
+            new_set=new_id,
+            added={set_id: round(run, 1)},
         )
 
         await self._async_save()
@@ -1368,7 +1362,11 @@ class TyreCoordinator:
         return shared
 
     async def async_stage_replacement(
-        self, new_id: str, positions: list[str], odometer: float | None = None
+        self,
+        new_id: str,
+        positions: list[str],
+        odometer: float | None = None,
+        total: float = 0.0,
     ) -> None:
         """Fit a set that does not exist yet.
 
@@ -1377,13 +1375,20 @@ class TyreCoordinator:
         options are only written when the flow ends. So its counters are laid
         down in the store first, under the id the record is about to carry:
         the reload that follows finds them there and the set comes up fitted,
-        at zero, from today's odometer.
+        from today's odometer.
+
+        `total` is what the form said the new set arrives with, which is nearly
+        always zero and occasionally is not — a second-hand set, tyres fitted
+        weeks ago and only now written down. It has to be passed rather than
+        left to the record: the counters laid down here are what `async_load`
+        reads back, and a stored total takes precedence over the record's
+        `initial_total`, which would otherwise be silently dropped.
         """
         if odometer is not None:
             await self.async_set_odometer(odometer)
         now = dt_util.utcnow()
         self._orphans[new_id] = {
-            DATA_TOTAL: 0.0,
+            DATA_TOTAL: round(float(total or 0.0), 1),
             DATA_MOUNTED_AT: self.data.odometer,
             DATA_MOUNTED_SINCE: now.isoformat(),
             DATA_RETIRED_AT: None,
@@ -1422,9 +1427,81 @@ class TyreCoordinator:
         self._notify()
 
     @callback
+    def _watched_pressures(self) -> set[str]:
+        """The entities chosen wheel by wheel, across every set."""
+        return {
+            entity
+            for tyre in self.data.sets.values()
+            for entity in tyre.tpms.values()
+            if entity
+        }
+
+    @callback
+    def _watch_tpms(self) -> None:
+        """Subscribe to everything a wheel reads from, replacing what was.
+
+        Rebuilt rather than set up once: the alarm a dock publishes beside its
+        pressure is *found*, not configured, so an entity that appears after
+        the fact — a firmware update, a disabled entity switched back on —
+        would otherwise never be watched, and a flat the TPMS itself flagged
+        would wait for the pressure figure to move before anything redrew.
+        """
+        if self._unsub_tpms is not None:
+            self._unsub_tpms()
+            self._unsub_tpms = None
+
+        watched = sorted(self._watched_pressures())
+        if not watched:
+            return
+
+        alarms = sorted(
+            {
+                alarm
+                for entity in watched
+                if (alarm := self._companions(entity).get("alarm"))
+            }
+        )
+        self._unsub_tpms = async_track_state_change_event(
+            self.hass, [*watched, *alarms], self._tpms_changed
+        )
+
+    @callback
+    def _concerns(self, entity_id: str | None) -> bool:
+        """True when that entity is one a wheel reads, or sits beside one."""
+        if not entity_id:
+            return False
+        chosen = self._watched_pressures()
+        if entity_id in chosen:
+            return True
+        # Already read as a sibling — including one just deleted, which the
+        # registry can no longer be asked about.
+        if any(entity_id in found.values() for found in self._companion_cache.values()):
+            return True
+        # New beside an old one: only the device the two share says so.
+        registry = er.async_get(self.hass)
+        entry = registry.async_get(entity_id)
+        if entry is None or not entry.device_id:
+            return False
+        return any(
+            (other := registry.async_get(one)) is not None
+            and other.device_id == entry.device_id
+            for one in chosen
+        )
+
+    @callback
     def _registry_changed(self, event) -> None:
-        """An entity moved, was renamed or disabled: forget what sat beside it."""
+        """An entity moved, was renamed or disabled: forget what sat beside it.
+
+        Every integration's registry writes arrive here, so the event is sifted
+        first: rebuilding on a light being renamed would walk the registry for
+        nothing. What survives the sift redraws too — a companion that changes
+        changes what the card shows, and nothing else would say so.
+        """
+        if not self._concerns(event.data.get("entity_id")):
+            return
         self._companion_cache.clear()
+        self._watch_tpms()
+        self._notify()
 
     @callback
     def _odometer_changed(self, event) -> None:
@@ -1516,6 +1593,40 @@ class TyreCoordinator:
         # the caller: it decides whether that is worth a write of its own. See
         # `_odometer_changed`, and `async_load` for the first reading of all.
         return True
+
+    # ----- the log -----
+
+    @callback
+    def _remember(
+        self, event: str, set_id: str, at: str | None = None, **extra
+    ) -> None:
+        """Write one line of the log, in the shape every line has.
+
+        Always the same four fields — what happened, which set it happened to,
+        where the odometer stood, and what that set was credited with — and the
+        manoeuvre's own details after them. The shapes used to differ: `from`
+        held a map of positions after a fitting and a bare set id after a
+        removal, so anything reading `last_swap` had to work out which
+        manoeuvre it was looking at before it could read a single field.
+
+        `added` is a mapping of set id to kilometres even when only one set is
+        concerned: a fitting settles however many sets it displaces, and a key
+        whose type depends on the manoeuvre is the same trap one step down.
+
+        The event is named by the bus constant the manoeuvre also fires, minus
+        the domain it carries for the bus: one word per manoeuvre, decided in
+        one place, and a log line that reads the same way as the automation
+        trigger beside it.
+        """
+        self.data.history.append(
+            {
+                "at": at or dt_util.utcnow().isoformat(),
+                "event": event.removeprefix(f"{DOMAIN}_"),
+                "set": set_id,
+                "odometer": self.data.odometer,
+                **extra,
+            }
+        )
 
     # ----- events -----
 

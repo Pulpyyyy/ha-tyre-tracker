@@ -263,7 +263,9 @@
       "dot_invalid": "A date code reads as two digits of week, then two of year — for example “3223”.",
       "axle_conflict": "This set is fitted and the other axle already carries something else: growing it to four wheels would declare six on the car. Take the other set off first.",
       "replace_axle": "Replacing puts the copy exactly where the original stands, so it must cover the same wheels. To change the count, add the copy without replacing and fit it separately.",
-      "vehicle_exists": "Another vehicle already goes by that name."
+      "vehicle_exists": "Another vehicle already goes by that name.",
+      "reference_required": "Give the tyres a reference — what is written on the sidewall, or what you would ask for at the counter.",
+      "tpms_duplicate": "That sensor is already on another wheel of this set. One sensor is screwed to one wheel."
     },
     "abort": {
       "not_loaded": "The vehicle is not loaded right now — fix what its notification reports, then come back here.",

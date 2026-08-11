@@ -45,6 +45,7 @@ from .const import (
     ATTR_POSITION,
     ATTR_TOTAL,
     AXLE_ALL,
+    CONFIG_VERSION,
     AXLE_PAIR,
     AXLES,
     CONF_AXLE,
@@ -252,8 +253,9 @@ class TyreTrackerConfigFlow(ConfigFlow, domain=DOMAIN):
 
     # The schema 1.0.0 shipped with. Lower numbers belonged to internal betas
     # whose migrations were dropped at release: such an entry no longer loads,
-    # and the vehicle is deleted and added again instead.
-    VERSION = 3
+    # and the vehicle is deleted and added again instead. `async_migrate_entry`
+    # in __init__.py is what says so out loud.
+    VERSION = CONFIG_VERSION
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None
@@ -665,22 +667,22 @@ class TyreTrackerOptionsFlow(OptionsFlow):
 
         slots = _slots(record.get(CONF_AXLE) or AXLE_ALL, self._words())
         current = record.get(CONF_TPMS) or {}
+        errors: dict[str, str] = {}
 
         if user_input is not None:
-            return self._save(
-                {
-                    CONF_SETS: self._replaced(
-                        {
-                            **record,
-                            CONF_TPMS: {
-                                slot: user_input[slot]
-                                for slot, _ in slots
-                                if user_input.get(slot)
-                            },
-                        }
-                    )
-                }
-            )
+            chosen = {
+                slot: user_input[slot] for slot, _ in slots if user_input.get(slot)
+            }
+            # One sensor is screwed to one wheel. The same entity under two
+            # slots is a slip of the picker, and it reads as two tyres agreeing
+            # perfectly — the one thing a pressure alarm can never catch, since
+            # a wheel losing its air would be reported as two.
+            errors = _duplicate_slots(chosen)
+            if not errors:
+                return self._save(
+                    {CONF_SETS: self._replaced({**record, CONF_TPMS: chosen})}
+                )
+            current = chosen
 
         return self.async_show_form(
             step_id="tpms",
@@ -692,6 +694,7 @@ class TyreTrackerOptionsFlow(OptionsFlow):
                     for slot, _ in slots
                 }
             ),
+            errors=errors,
             description_placeholders={
                 "set": self._header(),
                 "title": self._title(),
@@ -968,7 +971,17 @@ class TyreTrackerOptionsFlow(OptionsFlow):
                     await coordinator.async_retire(
                         self._set_id, user_input.get(ATTR_ODOMETER)
                     )
-                    await coordinator.async_stage_replacement(new_id, positions)
+                    # The figure the form asked for, carried through. The
+                    # counters staged here are what the reload reads back, and
+                    # they take precedence over the record's `initial_total`:
+                    # left to default, a second-hand set declared with 20 000
+                    # km already on it would have come up at zero, with nothing
+                    # anywhere saying where the figure went.
+                    await coordinator.async_stage_replacement(
+                        new_id,
+                        positions,
+                        total=float(data.get(CONF_INITIAL_TOTAL) or 0),
+                    )
                 return self._save(
                     {CONF_SETS: [*self._sets(), {CONF_SET_ID: new_id, **data}]}
                 )
@@ -1352,10 +1365,37 @@ def _errors(data: dict[str, Any]) -> dict[str, str]:
 
     A date code is refused rather than kept as it came: half a code says
     nothing, and a wrong one would age the set by whole years.
+
+    A reference is refused for being blank. The field is `Required`, but a
+    required string accepts an empty one, and a set with neither reference nor
+    label falls back to the word « Train » — which every other nameless set
+    also answers to, in a picker whose whole job is telling them apart. The
+    vehicle's name in this same flow is checked the same way; the set had been
+    left out.
     """
+    errors: dict[str, str] = {}
+    if not data.get(CONF_REFERENCE):
+        errors[CONF_REFERENCE] = "reference_required"
     if data.get(CONF_DOT) and not DOT_PATTERN.match(data[CONF_DOT]):
-        return {CONF_DOT: "dot_invalid"}
-    return {}
+        errors[CONF_DOT] = "dot_invalid"
+    return errors
+
+
+def _duplicate_slots(chosen: dict[str, str]) -> dict[str, str]:
+    """The slots sharing a sensor with another, each marked as refused.
+
+    Every one of them and not just the second: the picker cannot say which of
+    the two was the mistake, and underlining one of a pair would send the eye
+    to the field that may well be right.
+    """
+    seen: dict[str, int] = {}
+    for entity_id in chosen.values():
+        seen[entity_id] = seen.get(entity_id, 0) + 1
+    return {
+        slot: "tpms_duplicate"
+        for slot, entity_id in chosen.items()
+        if seen[entity_id] > 1
+    }
 
 
 def _title(data: dict[str, Any], words: Words) -> str:
