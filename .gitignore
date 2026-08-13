@@ -4,3 +4,8 @@ __pycache__/
 .vscode/
 # Real .storage files copied in for inspection — personal data, never committed.
 /tyre_tracker.*
+# Throwaway renders for review in the IDE — the documentation images are the
+# committed ones, these never are.
+/docs/preview-*.png
+# The local visual test bench that generates the documentation screenshots.
+/docs/screenshot-harness.html

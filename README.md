@@ -105,7 +105,7 @@ resources (storage mode). In YAML mode, add the resource by hand:
 ```yaml
 lovelace:
   resources:
-    - url: /tyre_tracker_frontend/tyres-card.js?v=1.0.1
+    - url: /tyre_tracker_frontend/tyres-card.js?v=1.1.0
       type: module
 ```
 
@@ -123,14 +123,33 @@ type: custom:floor-tyres-badge     # inside a picture-elements
 entity: sensor.alfa_gt_tyres
 advice_entity: binary_sensor.snowtire   # optional
 pressures: true                         # optional, 2x2 TPMS grid underneath
+image: /local/alfa.png                  # optional, car photo or brand logo
 style: { top: 40%, left: 62% }
 ```
 
-<img alt="The floorplan badge: fitted set and mileage, the 2x2 pressure grid, a red dot for the pressure alarm and an amber one for the rotation advice" src="docs/badge.png" width="400">
+`image` takes any URL — a file under `config/www/` served as `/local/…`, or a
+brand logo straight from [home-assistant/brands](https://brands.home-assistant.io)
+when the car's integration has one, e.g.
+`https://brands.home-assistant.io/renault/icon.png`. With an image the badge
+keeps a steady footprint: the set zone is always two lines tall and a lone
+set rides centred in it, so the chip is the same size with one set or two —
+a badge pinned on a plan should not breathe with its content. The image fits
+the height that results, never sizes it. A URL that stops answering removes
+the image rather than plant a broken-image glyph on the plan.
 
-The screenshots above come from [docs/screenshot-harness.html](docs/screenshot-harness.html),
-which renders both elements against a stubbed Home Assistant — open it in a
-browser to try the card without an installation, or to regenerate the images.
+With an image, whatever the car carries — one set of four or two pairs, with
+or without the pressure grid — the chip keeps the same size:
+
+<p>
+  <img alt="Badge with logo, one set of four" src="docs/badge-1set.png" width="320">
+  <img alt="Badge with logo, two pairs" src="docs/badge-2sets.png" width="320">
+</p>
+<p>
+  <img alt="Badge with logo, one set and the pressure grid" src="docs/badge-1set-tpms.png" width="320">
+  <img alt="Badge with logo, two pairs and the pressure grid" src="docs/badge-2sets-tpms.png" width="320">
+</p>
+
+<img alt="The floorplan badge: fitted set and mileage, the 2x2 pressure grid, a red dot for the pressure alarm and an amber one for the rotation advice" src="docs/badge.png" width="400">
 
 The card follows the language each person picked for themselves, not the
 server's: two people looking at the same dashboard read it each in their own.

@@ -476,6 +476,7 @@ const WORDS = {
     "mount.displaced_one": "” will come off, and its count closed at that reading.",
     "editor.advice": "Rotation advice (snowtire)",
     "editor.pressures": "TPMS pressures under the badge",
+    "editor.image": "Car photo or brand logo (URL, optional)",
     "editor.title": "Card title (default: the vehicle)",
     "editor.card_desc": "A vehicle's tyre fleet: state, fitting, removal, retirement",
     "editor.badge_desc": "Tyre badge for an isometric floor plan",
@@ -672,6 +673,7 @@ const WORDS = {
     "mount.displaced_one": "» sera déposé, et son compte arrêté au relevé.",
     "editor.advice": "Conseil de permutation (snowtire)",
     "editor.pressures": "Pressions TPMS sous la pastille",
+    "editor.image": "Photo de la voiture ou logo de marque (URL, facultatif)",
     "editor.title": "Titre de la carte (par défaut : le véhicule)",
     "editor.card_desc": "Parc de pneumatiques d'un véhicule : état, montage, dépose, retrait",
     "editor.badge_desc": "Pastille de pneumatiques pour plan isométrique",
@@ -774,6 +776,7 @@ banner("Tyres Card", CARD_VERSION);
      entity: sensor.alfa_pneumatiques
      advice_entity: binary_sensor.snowtire   optional, rotation advice
      pressures: true                         optional, 2x2 TPMS grid underneath
+     image: /local/alfa.png                  optional, car photo or brand logo
      tap_action: { ... }                     optional, default: the popup below
      style: { top: 40%, left: 62%, transform: ... }
 
@@ -1066,6 +1069,45 @@ const BADGE_STYLE = `
   .badge { flex-direction: column; align-items: stretch; gap: 2px; }
   .line { display: flex; align-items: center; gap: 4px; }
 
+  /* The car itself — a brand logo or a photo, whatever URL the config gives.
+     Taken out of the flow entirely: the chip is sized by its text alone, and
+     the image fits into whatever height that produced, centred, never adding
+     a pixel of its own. In the flow, a tall image would centre the text in
+     leftover space — a floating line in a chip twice its size. The reserve on
+     the left is fixed so the text column never shifts with the image ratio. */
+  .badge.with-car { position: relative; padding-left: 48px; }
+
+  /* The set lines, in a zone of their own so it can hold a size. With a car
+     in the corner the badge keeps a steady footprint: the zone is always two
+     lines tall and a lone set rides centred in it — one set or two, the chip
+     is the same, because a badge pinned on a plan should not breathe with
+     its content. The pressure grid still adds below, identically either way. */
+  .sets {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: stretch;
+    gap: 2px;
+  }
+  .badge.with-car .sets { min-height: 34px; }
+  .car {
+    position: absolute;
+    left: 5px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 38px;
+    max-height: calc(100% - 8px);
+    object-fit: contain;
+    /* The light plate is for logos, which are routinely dark line-work and
+       would sink into the chip. A photo is opaque and simply keeps a thin
+       print border. */
+    background: rgba(255, 255, 255, .88);
+    border-radius: 4px;
+    padding: 2px;
+    box-sizing: border-box;
+  }
+  .car[hidden] { display: none; }
+
   /* The season, in colour — the same shade as in the card, taken from the
      theme's tokens. The rest of the line stays white: on a plan, it is the
      set's name one reads, and two colours side by side would fight over the
@@ -1219,7 +1261,25 @@ class FloorTyresBadge extends HTMLElement {
       </div>`;
 
     const $ = (sel) => this.shadowRoot.querySelector(sel);
-    this.#els = { badge: $(".badge"), tip: $(".tip"), flat: $(".flat") };
+    this.#els = { badge: $(".badge"), tip: $(".tip"), flat: $(".flat"), car: null };
+
+    // Built once with the badge, not on every state push: the element is
+    // reused across repaints, so the browser never reloads the image while
+    // the odometer chatters. Purely decorative — the name is already spoken.
+    if (this.#config.image) {
+      const img = document.createElement("img");
+      img.className = "car";
+      img.src = this.#config.image;
+      img.alt = "";
+      // A stale URL must not plant the broken-image glyph on the plan: the
+      // badge simply tightens back to its text, reserve included.
+      img.addEventListener("error", () => {
+        img.hidden = true;
+        this.#els.badge.classList.remove("with-car");
+      });
+      this.#els.car = img;
+      this.#els.badge.classList.add("with-car");
+    }
 
     const fire = () => this.#fire();
     this.#els.badge.addEventListener("click", fire);
@@ -1285,7 +1345,17 @@ class FloorTyresBadge extends HTMLElement {
     // the set's target, the badge has nothing to work out again.
     const alarmed = attrs.pressure_alarm ?? [];
 
-    this.#els.badge.replaceChildren(this.#els.tip, this.#els.flat);
+    // The image lives outside the flow (see `.car`), so the badge stays the
+    // single column it always was — with or without a car in the corner. The
+    // lines get a zone of their own, which is what holds the two-slot height.
+    const sets = document.createElement("div");
+    sets.className = "sets";
+    this.#els.badge.replaceChildren(
+      this.#els.tip,
+      this.#els.flat,
+      ...(this.#els.car ? [this.#els.car] : []),
+      sets
+    );
     this.#els.tip.hidden = !advice;
     this.#els.flat.hidden = !alarmed.length;
     if (alarmed.length) this.#els.flat.title = t("card.alarm_title");
@@ -1293,14 +1363,14 @@ class FloorTyresBadge extends HTMLElement {
     if (!lines.length) {
       // Nothing fitted: the badge says so rather than disappear, failing which
       // one would think it broken.
-      this.#els.badge.appendChild(this.#line(null, [], attrs));
+      sets.appendChild(this.#line(null, [], attrs));
       this.#els.badge.title = t("card.none_fitted");
       this.#els.badge.setAttribute("aria-label", t("card.badge_none"));
       return;
     }
 
     for (const line of lines) {
-      this.#els.badge.appendChild(this.#line(line.set, line.positions, attrs));
+      sets.appendChild(this.#line(line.set, line.positions, attrs));
     }
 
     const tpms = this.#config.pressures ? this.#tpms(attrs) : null;
@@ -5729,6 +5799,7 @@ const BADGE_LABELS = () => ({
   entity: t("editor.entity"),
   advice_entity: t("editor.advice"),
   pressures: t("editor.pressures"),
+  image: t("editor.image"),
 });
 
 const CARD_LABELS = () => ({ ...BADGE_LABELS(), title: t("editor.title") });
@@ -5737,7 +5808,11 @@ const CARD_LABELS = () => ({ ...BADGE_LABELS(), title: t("editor.title") });
    and with the detail the badge has no room to carry. */
 defineEditor(
   "floor-tyres-badge-editor",
-  [...ENTITY_SCHEMA, { name: "pressures", selector: { boolean: {} } }],
+  [
+    ...ENTITY_SCHEMA,
+    { name: "image", selector: { text: {} } },
+    { name: "pressures", selector: { boolean: {} } },
+  ],
   BADGE_LABELS
 );
 defineEditor(
