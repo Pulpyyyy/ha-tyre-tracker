@@ -35,18 +35,6 @@
     "fallback": "Set"
   },
   "status": {
-    "mounted": "fitted",
-    "mounted_at": "fitted at the {position}",
-    "removed": "off the car",
-    "retired": "in the history",
-    "history": "history",
     "bare": "No tyres"
-  },
-  "entry_title": {
-    "template": "{article}{vehicle} tyres",
-    "empty": "Tyre tracking",
-    "article": "",
-    "article_elided": "",
-    "elides_before": ""
   }
 }

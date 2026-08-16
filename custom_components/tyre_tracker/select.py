@@ -20,9 +20,12 @@ from .entity import TyreEntity
 async def async_setup_entry(
     hass: HomeAssistant, entry: TyreConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up one selector per position."""
-    coordinator = entry.runtime_data
-    async_add_entities(TyreMountedSelect(coordinator, p) for p in POSITIONS)
+    """Set up one selector per position, for every vehicle."""
+    async_add_entities(
+        TyreMountedSelect(coordinator, p)
+        for coordinator in entry.runtime_data.values()
+        for p in POSITIONS
+    )
 
 
 class TyreMountedSelect(TyreEntity, SelectEntity):

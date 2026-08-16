@@ -18,14 +18,18 @@
  * read, no arithmetic on the card side — the live mileage is already resolved
  * by the coordinator, the only thing that knows the mount odometer.
  *
- * What is written goes through the component's services when it is a manoeuvre
- * — fit, remove, rotate — and through the options flow when it is a record.
- * That flow the card drives over REST without ever showing its screens: it
- * reads a step's schema to know what to ask, draws its own fields, and posts
- * back under the same names. The rules therefore stay written once, in Python,
- * and serve Settings — where the integration has to remain usable without the
- * card — as well as the card, where they present themselves differently.
- * `config_flow.py` describes, `tyres-card.js` gives shape.
+ * What is written goes through the component's services, and only when it is a
+ * manoeuvre: fit, remove, rotate, file away, correct the count. Those are done
+ * with the car in front of one, from the row that shows the set they concern.
+ *
+ * A record is not written here. The card used to draw those forms too, driving
+ * the integration's options flow over REST without ever showing its screens —
+ * reading a step's schema to know what to ask, posting back under the same
+ * names. The flow is gone: what it described is written once in
+ * `websocket_api.py` and given shape once in the editor panel served at
+ * /tyre-tracker, which shows the whole car at a time where a flow could only
+ * ever show one step. The card links to it, naming the vehicle and the set in
+ * the address so the page opens where the gesture pointed.
  *
  * The file is delivered by the component itself (custom_components/
  * tyre_tracker/frontend/), which serves it at /tyre_tracker_frontend/tyres-card.js
@@ -321,8 +325,6 @@ const WORDS = {
   en: {
     "editor.entity": "“Tyres” sensor",
     "msg.restored": "“{name}” put back into service.",
-    "resync.tracking": "The tracking",
-    "resync.sensor": "The sensor",
     "punct.and": "” and “",
     "punct.open": "“",
     "block.count_rotation": "of which {km} since the last rotation",
@@ -341,10 +343,6 @@ const WORDS = {
     "help.odo_added": "+{km} since the last reading.",
     "help.odo_below": "Below the current odometer ({km}) — the integration would refuse it.",
     "card.entity_missing": "Entity not found: {entity}",
-    "msg.separated": "“{name}” separated into two pairs.",
-    "msg.deleted": "“{name}” deleted.",
-    "resync.explain": "Taking the sensor's reading settles the fitted set at {tracked} km — those kilometres stay its own — then counts again from {reading} km.",
-    "resync.forever": " at {tracked} km for good.",
     "card.no_reading_for": " — no reading for {since}",
     "card.advice_short": ". Rotation advised",
     "status.mounted_at": "fitted at the {position}",
@@ -385,43 +383,21 @@ const WORDS = {
     "block.sensors_none": "No sensor attached.",
     "block.count": "Count",
     "act.add_set": "Add a set",
-    "act.add_vehicle": "Add another vehicle",
     "act.cancel": "Cancel",
     "act.close": "Close",
     "act.save": "Save",
     "act.edit": "Edit",
     "act.attach": "Attach",
     "act.correct": "Correct",
-    "act.delete": "Delete",
-    "act.delete_set": "Delete the set",
     "act.mount": "Fit",
     "act.mount_all": "Fit all 4",
     "act.unmount": "Remove",
     "act.rotate": "Rotate",
     "act.restore": "Put back into service",
     "act.retire": "Move to history",
-    "act.separate": "Separate",
-    "act.add_the_set": "Add the set",
-    "act.create_copy": "Create the copy",
-    "act.keep_tracking": "Keep the tracking",
-    "act.take_sensor": "Take the sensor's reading",
+    "act.editor": "Open the editor",
     "act.update_odometer": "Update the odometer…",
-    "act.integration_page": "Integration page",
     "act.card_options": "Card options",
-    "act.settings": "Settings",
-    "sheet.new_set": "New set",
-    "sheet.new_set_note": "Mileage is attached to the set, not to its reference: correcting it later loses nothing.",
-    "sheet.edit": "Edit the record",
-    "sheet.edit_note": "The kilometres covered do not depend on anything written here: they stay.",
-    "sheet.duplicate": "Duplicate the record",
-    "sheet.duplicate_note": "A new set takes this record, with a counter of its own. Nothing is taken from the original.",
-    "sheet.on_the_car": "On the car",
-    "sheet.tpms": "Pressure sensors",
-    "sheet.tpms_note": "A sensor is screwed to its wheel: it belongs to the set and follows it from one car to the next. Clearing a field detaches it.",
-    "sheet.separate": "Separate into two pairs",
-    "sheet.separate_note": "Both halves start from the same total — those kilometres were covered on all four tyres. From here each counts for itself. Nothing comes off the car.",
-    "sheet.resync": "Two readings disagree",
-    "sheet.settings": "Vehicle settings",
     "sheet.odometer": "Vehicle odometer",
     "sheet.odometer_note": "The total read on the dashboard. Every set's mileage follows from it, so it can only go up.",
     "sheet.reading": "Odometer reading",
@@ -430,46 +406,14 @@ const WORDS = {
     "sheet.rotate_note": "Each wheel moves to the other end of its side. The mileage does not change: only the reminder starts again, and the sensors follow their wheel.",
     "sheet.unmount_note": "This set's count stops here. The kilometres it covered stay its own.",
     "sheet.mount_all": "Fit all four wheels.",
-    "group.vehicle": "The vehicle",
-    "group.odometer": "The odometer",
-    "group.rotation": "The rotation reminder",
-    "group.odometer_src": "Odometer source",
-    "help.pair": "a pair",
-    "help.pair_note": "A pair fits either the front or the rear, and moves from one to the other.",
-    "help.dot": "The four digits on the sidewall: the week, then the year. The whole DOT line can be pasted as it reads.",
-    "help.label": "Replaces the reference on screen",
-    "help.price": "For the whole set. Divided by what it covers, it says which reference was actually the cheapest.",
-    "help.storage": "Garage, left shelf",
-    "help.initial_total": "For taking over tracking kept elsewhere. Zero for tyres that have not turned yet.",
-    "help.vehicle": "Names the device, and through it every entity — “Alfa GT Odometer”.",
-    "help.rotation": "The rotation reminder, on a fitted four-wheel set. Zero says nothing about it.",
-    "help.odometer_entity": "Linking the car's odometer saves typing it in at every move. Left empty, a field appears at the bottom of the card.",
-    "help.replace": "What happens to the fitted set",
-    "help.replaced": "Replaced",
-    "help.replaced_note": "it moves to the history",
-    "help.kept": "Left in place",
-    "help.kept_note": "the copy waits in the garage",
-    "help.pair_new": "Becomes a new set, with its sensors.",
-    "help.pair_kept": "Stays with this record, and keeps its history.",
-    "help.tracked_so_far": "counted so far",
     "help.odo_dashboard": "Enter the total read on the dashboard.",
     "help.odo_nothing": "No kilometre added.",
-    "msg.saved_settings": "Settings saved.",
-    "msg.vehicle_failed": "The vehicle could not be saved.",
-    "msg.set_added": "Set added.",
     "msg.odometer_saved": "Odometer saved.",
     "msg.rotated": "Rotation recorded.",
     "msg.adjusted": "Total corrected.",
     "msg.retired": "Set moved to the history.",
     "msg.unmounted": "Set removed.",
     "msg.mounted": "Set fitted.",
-    "msg.record_saved": "Record saved.",
-    "msg.sensors_saved": "Sensors saved.",
-    "msg.duplicated": "Record duplicated.",
-    "resync.no_back": "An odometer does not go backwards: this reading would be refused, and the tracking",
-    "resync.stuck": "would stay stuck",
-    "delete.head": "The record will be erased, with its sensor and its device. Its",
-    "delete.tail": "are kept: adding the set again finds them.",
     "retire.tail": "will be frozen. The set stays readable, filed in the history, and can no longer be fitted.",
     "mount.displaces_all": "” comes off entirely — half a set of four is not a set of four.",
     "mount.displaced_many": "” will come off, and their count closed at that reading.",
@@ -480,12 +424,10 @@ const WORDS = {
     "editor.title": "Card title (default: the vehicle)",
     "editor.card_desc": "A vehicle's tyre fleet: state, fitting, removal, retirement",
     "editor.badge_desc": "Tyre badge for an isometric floor plan",
-    "field.optional": "optional",
     "field.odometer": "Odometer",
     "field.total": "Total",
     "act.back": "Back",
     "act.confirm": "Confirm",
-    "card.opening": "Opening…",
     "card.sets_label": "Sets",
     "card.tyres": "Tyres",
     "card.tyres_prefix": "Tyres: ",
@@ -498,12 +440,10 @@ const WORDS = {
     "card.mute_for": "silent {since}",
     "card.no_sensor": "no sensor",
     "card.set_fallback": "Set",
-    "card.unknown_error": "Unknown error.",
     "status.available": "Available",
     "block.one_sensor": "1 sensor",
     "block.n_sensors": "{n} sensors",
     "block.total_of": "{km} in total",
-    "sheet.more_fields": "Size, DOT code, price, storage…",
     "punct.colon": ": ",
     "unit.years_one": "{n} year",
     "unit.years_many": "{n} years",
@@ -518,8 +458,6 @@ const WORDS = {
   fr: {
     "editor.entity": "Capteur « Pneumatiques »",
     "msg.restored": "« {name} » remis en service.",
-    "resync.tracking": "Le suivi",
-    "resync.sensor": "Le capteur",
     "punct.and": " » et « ",
     "punct.open": "« ",
     "block.count_rotation": "dont {km} depuis la dernière permutation",
@@ -538,10 +476,6 @@ const WORDS = {
     "help.odo_added": "+{km} depuis le dernier relevé.",
     "help.odo_below": "Inférieur au compteur actuel ({km}) — le composant refuserait.",
     "card.entity_missing": "Entité introuvable : {entity}",
-    "msg.separated": "« {name} » séparé en deux paires.",
-    "msg.deleted": "« {name} » supprimé.",
-    "resync.explain": "Reprendre le capteur solde d'abord le train monté à {tracked} km — ces kilomètres restent les siens — puis repart de {reading} km.",
-    "resync.forever": " à {tracked} km pour de bon.",
     "card.no_reading_for": " — aucun relevé depuis {since}",
     "card.advice_short": ". Permutation conseillée",
     "status.mounted_at": "monté à l'{position}",
@@ -582,43 +516,21 @@ const WORDS = {
     "block.sensors_none": "Aucun capteur associé.",
     "block.count": "Compte",
     "act.add_set": "Ajouter un train",
-    "act.add_vehicle": "Ajouter un autre véhicule",
     "act.cancel": "Annuler",
     "act.close": "Fermer",
     "act.save": "Enregistrer",
     "act.edit": "Modifier",
     "act.attach": "Associer",
     "act.correct": "Corriger",
-    "act.delete": "Supprimer",
-    "act.delete_set": "Supprimer le train",
     "act.mount": "Monter",
     "act.mount_all": "Monter les 4",
     "act.unmount": "Déposer",
     "act.rotate": "Permuter",
     "act.restore": "Remettre en service",
     "act.retire": "Passer à l'historique",
-    "act.separate": "Séparer",
-    "act.add_the_set": "Ajouter le train",
-    "act.create_copy": "Créer la copie",
-    "act.keep_tracking": "Garder le suivi",
-    "act.take_sensor": "Reprendre le capteur",
+    "act.editor": "Ouvrir l'éditeur",
     "act.update_odometer": "Mettre à jour le compteur…",
-    "act.integration_page": "Page de l'intégration",
     "act.card_options": "Options de la carte",
-    "act.settings": "Réglages",
-    "sheet.new_set": "Nouveau train",
-    "sheet.new_set_note": "Le kilométrage s'attache au train, pas à sa référence : la corriger plus tard ne perd rien.",
-    "sheet.edit": "Modifier la fiche",
-    "sheet.edit_note": "Les kilomètres parcourus ne dépendent pas de ce qui s'écrit ici : ils restent.",
-    "sheet.duplicate": "Dupliquer la fiche",
-    "sheet.duplicate_note": "Un nouveau train reprend cette fiche, avec un compteur à lui. Rien n'est pris à l'original.",
-    "sheet.on_the_car": "Sur la voiture",
-    "sheet.tpms": "Capteurs de pression",
-    "sheet.tpms_note": "Un capteur est vissé sur sa roue : il appartient au train et le suit d'une voiture à l'autre. Vider un champ le détache.",
-    "sheet.separate": "Séparer en deux paires",
-    "sheet.separate_note": "Les deux moitiés partent du même total — ces kilomètres ont été faits sur les quatre pneus. À partir d'ici, chacune compte pour elle-même. Rien n'est démonté.",
-    "sheet.resync": "Deux relevés se contredisent",
-    "sheet.settings": "Réglages du véhicule",
     "sheet.odometer": "Compteur du véhicule",
     "sheet.odometer_note": "Le total lu au tableau de bord. Les kilomètres de chaque jeu s'en déduisent : il ne peut que monter.",
     "sheet.reading": "Relevé du compteur",
@@ -627,46 +539,14 @@ const WORDS = {
     "sheet.rotate_note": "Chaque roue passe à l'autre bout de son côté. Le kilométrage ne change pas : seul le rappel repart, et les capteurs suivent leur roue.",
     "sheet.unmount_note": "Le compte de ce train s'arrête ici. Les kilomètres parcourus lui restent acquis.",
     "sheet.mount_all": "Monter les quatre roues.",
-    "group.vehicle": "Le véhicule",
-    "group.odometer": "Le compteur",
-    "group.rotation": "Le rappel de permutation",
-    "group.odometer_src": "Source du compteur",
-    "help.pair": "une paire",
-    "help.pair_note": "Une paire se monte à l'avant ou à l'arrière, et passe de l'une à l'autre.",
-    "help.dot": "Les quatre chiffres du flanc : la semaine, puis l'année. La ligne DOT entière peut être collée telle quelle.",
-    "help.label": "Remplace la référence à l'écran",
-    "help.price": "Pour le train entier. Divisé par ce qu'il parcourt, il dit quelle référence revenait le moins cher.",
-    "help.storage": "Garage, étagère gauche",
-    "help.initial_total": "Pour reprendre un suivi tenu ailleurs. Zéro pour des pneus qui n'ont pas tourné.",
-    "help.vehicle": "Nomme l'appareil, et à travers lui chaque entité — « Alfa GT Odomètre ».",
-    "help.rotation": "Le rappel de permutation, sur un train de 4 monté. Zéro n'en dit rien.",
-    "help.odometer_entity": "Relier le compteur de la voiture évite de le saisir à chaque manœuvre. Laissé vide, un champ apparaît en bas de la carte.",
-    "help.replace": "Ce qui arrive au train monté",
-    "help.replaced": "Remplacé",
-    "help.replaced_note": "il passe à l'historique",
-    "help.kept": "Laissé en place",
-    "help.kept_note": "la copie attend au garage",
-    "help.pair_new": "Devient un nouveau train, avec ses capteurs.",
-    "help.pair_kept": "Reste sur cette fiche, et garde son historique.",
-    "help.tracked_so_far": "compté jusqu'ici",
     "help.odo_dashboard": "Entrez le total lu au tableau de bord.",
     "help.odo_nothing": "Aucun kilomètre ajouté.",
-    "msg.saved_settings": "Réglages enregistrés.",
-    "msg.vehicle_failed": "Le véhicule n'a pas pu être enregistré.",
-    "msg.set_added": "Train ajouté.",
     "msg.odometer_saved": "Compteur enregistré.",
     "msg.rotated": "Permutation enregistrée.",
     "msg.adjusted": "Cumul corrigé.",
     "msg.retired": "Train passé à l'historique.",
     "msg.unmounted": "Train déposé.",
     "msg.mounted": "Train monté.",
-    "msg.record_saved": "Fiche enregistrée.",
-    "msg.sensors_saved": "Capteurs enregistrés.",
-    "msg.duplicated": "Fiche dupliquée.",
-    "resync.no_back": "Un compteur ne recule pas : ce relevé serait refusé, et le suivi",
-    "resync.stuck": "resterait bloqué",
-    "delete.head": "La fiche sera effacée, avec son capteur et son appareil. Ses",
-    "delete.tail": "restent en mémoire : rajouter le train les retrouve.",
     "retire.tail": "seront figés. Le train restera consultable, rangé dans l'historique, et ne pourra plus être monté.",
     "mount.displaces_all": "» sera entièrement déposé — la moitié d'un train de 4 n'est pas un train de 4.",
     "mount.displaced_many": "» seront déposés, et leur compte arrêté au relevé.",
@@ -677,12 +557,10 @@ const WORDS = {
     "editor.title": "Titre de la carte (par défaut : le véhicule)",
     "editor.card_desc": "Parc de pneumatiques d'un véhicule : état, montage, dépose, retrait",
     "editor.badge_desc": "Pastille de pneumatiques pour plan isométrique",
-    "field.optional": "facultatif",
     "field.odometer": "Compteur",
     "field.total": "Cumul",
     "act.back": "Retour",
     "act.confirm": "Valider",
-    "card.opening": "Ouverture…",
     "card.sets_label": "Jeux",
     "card.tyres": "Pneumatiques",
     "card.tyres_prefix": "Pneumatiques : ",
@@ -695,12 +573,10 @@ const WORDS = {
     "card.mute_for": "muet {since}",
     "card.no_sensor": "aucun capteur",
     "card.set_fallback": "Train",
-    "card.unknown_error": "Erreur inconnue.",
     "status.available": "Disponible",
     "block.one_sensor": "1 capteur",
     "block.n_sensors": "{n} capteurs",
     "block.total_of": "{km} au total",
-    "sheet.more_fields": "Dimension, code DOT, prix, rangement…",
     "punct.colon": " : ",
     "unit.years_one": "{n} an",
     "unit.years_many": "{n} ans",
@@ -788,6 +664,16 @@ banner("Tyres Card", CARD_VERSION);
 
 /** The component's service, aimed at the sensor that carries the state. */
 const DOMAIN = "tyre_tracker";
+
+/**
+ * The editor's address, served by the component itself.
+ *
+ * Everything that is written down rather than done — the records, the sensors,
+ * the vehicle's own settings — is edited there. The card points at it and adds
+ * what it knows to the address, so the page opens on the right car and, when a
+ * set was touched, on that set.
+ */
+const PANEL_PATH = "tyre-tracker";
 
 /**
  * The three markings of a sidewall, and the shade that goes with each.
@@ -1066,8 +952,8 @@ const BADGE_STYLE = `
   /* Two different sets fitted: two lines, one per axle. Electing one of the two
      would be a lie, and joining them on one line would make unreadable what has
      to be read from a distance, on a busy plan. */
-  .badge { flex-direction: column; align-items: stretch; gap: 2px; }
-  .line { display: flex; align-items: center; gap: 4px; }
+  .badge { flex-direction: column; align-items: stretch; gap: 0.15em; }
+  .line { display: flex; align-items: center; gap: 0.31em; }
 
   /* The car itself — a brand logo or a photo, whatever URL the config gives.
      Taken out of the flow entirely: the chip is sized by its text alone, and
@@ -1075,7 +961,7 @@ const BADGE_STYLE = `
      a pixel of its own. In the flow, a tall image would centre the text in
      leftover space — a floating line in a chip twice its size. The reserve on
      the left is fixed so the text column never shifts with the image ratio. */
-  .badge.with-car { position: relative; padding-left: 48px; }
+  .badge.with-car { position: relative; padding-left: 3.7em; }
 
   /* The set lines, in a zone of their own so it can hold a size. With a car
      in the corner the badge keeps a steady footprint: the zone is always two
@@ -1087,23 +973,23 @@ const BADGE_STYLE = `
     flex-direction: column;
     justify-content: center;
     align-items: stretch;
-    gap: 2px;
+    gap: 0.15em;
   }
-  .badge.with-car .sets { min-height: 34px; }
+  .badge.with-car .sets { min-height: 2.6em; }
   .car {
     position: absolute;
-    left: 5px;
+    left: 0.38em;
     top: 50%;
     transform: translateY(-50%);
-    width: 38px;
-    max-height: calc(100% - 8px);
+    width: 2.9em;
+    max-height: calc(100% - 0.6em);
     object-fit: contain;
     /* The light plate is for logos, which are routinely dark line-work and
        would sink into the chip. A photo is opaque and simply keeps a thin
        print border. */
     background: rgba(255, 255, 255, .88);
-    border-radius: 4px;
-    padding: 2px;
+    border-radius: 0.31em;
+    padding: 0.15em;
     box-sizing: border-box;
   }
   .car[hidden] { display: none; }
@@ -1135,11 +1021,11 @@ const BADGE_STYLE = `
   .tpms {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 1px 8px;
-    margin-top: 3px;
-    padding-top: 3px;
+    gap: 0.08em 0.6em;
+    margin-top: 0.23em;
+    padding-top: 0.23em;
     border-top: 1px solid rgba(255, 255, 255, .35);
-    font-size: 11px;
+    font-size: 0.85em;
     font-variant-numeric: tabular-nums;
   }
   /* Each column tightens towards the axis of the car: the two wheels of one
@@ -1160,17 +1046,17 @@ const BADGE_STYLE = `
 
   /* The axle, when there is a choice to make — so never for a set of 4. */
   .pos {
-    font-size: 10px;
+    font-size: 0.77em;
     font-weight: 700;
-    letter-spacing: .4px;
-    padding-top: 1px;
+    letter-spacing: 0.03em;
+    padding-top: 0.08em;
   }
   /* The quantity: two or four tyres. Discreet, but always there — it is what
      says whether the other axle still carries something else. */
   .qty {
-    font-size: 10px;
+    font-size: 0.77em;
     opacity: .7;
-    padding-top: 1px;
+    padding-top: 0.08em;
     font-variant-numeric: tabular-nums;
   }
 
@@ -1187,9 +1073,9 @@ const BADGE_STYLE = `
   }
   /* The mileage steps back: it is the name one looks for first. */
   .km {
-    font-size: 12px;
+    font-size: 0.92em;
     opacity: .8;
-    padding-top: 1px;
+    padding-top: 0.08em;
     font-variant-numeric: tabular-nums;
   }
 
@@ -1199,13 +1085,13 @@ const BADGE_STYLE = `
      line or two. */
   .tip {
     position: absolute;
-    top: -3px;
-    right: -3px;
-    width: 7px;
-    height: 7px;
+    top: -0.23em;
+    right: -0.23em;
+    width: 0.54em;
+    height: 0.54em;
     border-radius: 50%;
     background: #ffb300;
-    box-shadow: 0 0 5px rgba(255, 179, 0, .8);
+    box-shadow: 0 0 0.38em rgba(255, 179, 0, .8);
   }
   .tip[hidden] { display: none; }
 
@@ -1215,13 +1101,13 @@ const BADGE_STYLE = `
      time", the other says "now". */
   .flat {
     position: absolute;
-    top: -3px;
-    left: -3px;
-    width: 7px;
-    height: 7px;
+    top: -0.23em;
+    left: -0.23em;
+    width: 0.54em;
+    height: 0.54em;
     border-radius: 50%;
     background: #ff5252;
-    box-shadow: 0 0 5px rgba(255, 82, 82, .8);
+    box-shadow: 0 0 0.38em rgba(255, 82, 82, .8);
   }
   .flat[hidden] { display: none; }
 `;
@@ -1552,9 +1438,60 @@ function portalBackdrop() {
   document.head.appendChild(style);
 }
 
+const FP_FONTS = `
+:host {
+  --f-base: calc(var(--ha-font-size-s, 14px) * 15 / 14);
+  --f-9-5:  calc(var(--f-base) *  9.5 / 14);
+  --f-10:   calc(var(--f-base) * 10   / 14);
+  --f-10-5: calc(var(--f-base) * 10.5 / 14);
+  --f-11:   calc(var(--f-base) * 11   / 14);
+  --f-11-5: calc(var(--f-base) * 11.5 / 14);
+  --f-12:   calc(var(--f-base) * 12   / 14);
+  --f-12-5: calc(var(--f-base) * 12.5 / 14);
+  --f-13:   calc(var(--f-base) * 13   / 14);
+  --f-14:   var(--f-base);
+  --f-15:   calc(var(--f-base) * 15   / 14);
+  --f-16:   calc(var(--f-base) * 16   / 14);
+  --f-17:   calc(var(--f-base) * 17   / 14);
+  --f-20:   calc(var(--f-base) * 20   / 14);
+  --f-24:   calc(var(--f-base) * 24   / 14);
+  --f-34:   calc(var(--f-base) * 34   / 14);
+}
+`;
+
+const FP_CONTROLS = `
+:host {
+  --fp-ok:   var(--success-color, #3E9D6B);
+  --fp-warn: var(--warning-color, #B38046);
+  --fp-bad:  var(--error-color, #FF554C);
+  --fp-info: var(--info-color, #039be5);
+
+  --fp-focus: 2px solid var(--primary-color, #03a9f4);
+  --fp-focus-off: 2px;
+
+  --fp-s0: 2px;
+  --fp-s1: 4px;
+  --fp-sh: 6px;
+  --fp-s2: 8px;
+  --fp-s3: 12px;
+  --fp-s4: 16px;
+  --fp-s5: 24px;
+
+  --fp-pill-h: 30px;
+  --fp-pill-r: 15px;
+  --fp-ctl-h: 40px;
+  --fp-ctl-r: 8px;
+  --fp-field-r: 4px;
+  --fp-round: 40px;
+  --fp-round-lg: 48px;
+}
+`;
+
 const CARD_STYLE = `
+  ${FP_FONTS}
+  ${FP_CONTROLS}
   ha-card { display: block; overflow: hidden; }
-  .body { padding: 0 0 14px; }
+  .body { padding: 0 0 var(--fp-s4); }
 
   /* ---- what derives from a set's shade ----
 
@@ -1585,19 +1522,19 @@ const CARD_STYLE = `
   .chead {
     display: flex;
     align-items: flex-start;
-    gap: 8px;
-    padding: 14px 8px 12px 16px;
+    gap: var(--fp-s2);
+    padding: var(--fp-s4) var(--fp-s2) var(--fp-s3) var(--fp-s4);
   }
   .chead .ct { flex: 1; min-width: 0; }
   .chead .h {
-    font-size: 16px;
+    font-size: var(--f-16);
     font-weight: 500;
     line-height: 1.3;
     letter-spacing: -.01em;
   }
   .chead .s {
-    margin-top: 2px;
-    font-size: 13px;
+    margin-top: var(--fp-s0);
+    font-size: var(--f-13);
     color: var(--secondary-text-color);
     font-variant-numeric: tabular-nums;
   }
@@ -1606,7 +1543,7 @@ const CARD_STYLE = `
     flex: 0 0 auto;
     width: 40px;
     height: 40px;
-    margin-top: -6px;
+    margin-top: -var(--fp-sh);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1626,8 +1563,8 @@ const CARD_STYLE = `
   .hero {
     display: flex;
     align-items: flex-start;
-    gap: 14px;
-    padding: 16px 16px 14px;
+    gap: var(--fp-s4);
+    padding: var(--fp-s4) var(--fp-s4) var(--fp-s4);
   }
   /* Two blocks as soon as front and rear differ: announcing a single set
      would be false, and nothing further down would put the mistake right. */
@@ -1637,13 +1574,13 @@ const CARD_STYLE = `
     gap: 1px;
     background: var(--divider-color);
   }
-  .heroes .hero { background: var(--card-background-color); padding: 14px; }
-  .heroes .km { font-size: 21px; }
+  .heroes .hero { background: var(--card-background-color); padding: var(--fp-s4); }
+  .heroes .km { font-size: var(--f-20); }
   .hero .mark {
     flex: 0 0 auto;
     width: 42px;
     height: 42px;
-    border-radius: 12px;
+    border-radius: var(--ha-card-border-radius, 12px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1665,28 +1602,28 @@ const CARD_STYLE = `
   }
   .pos {
     display: block;
-    margin-bottom: 3px;
-    font-size: 12px;
+    margin-bottom: var(--fp-s1);
+    font-size: var(--f-12);
     font-weight: 700;
     letter-spacing: .5px;
     text-transform: uppercase;
     color: var(--secondary-text-color);
   }
   .km {
-    font-size: 27px;
+    font-size: var(--f-24);
     font-weight: 700;
     line-height: 1.05;
     letter-spacing: -.02em;
     font-variant-numeric: tabular-nums;
   }
-  .ref { margin-top: 2px; font-size: 14px; font-weight: 500; }
-  .sub { margin-top: 3px; font-size: 13px; color: var(--secondary-text-color); }
+  .ref { margin-top: var(--fp-s0); font-size: var(--f-14); font-weight: 500; }
+  .sub { margin-top: var(--fp-s1); font-size: var(--f-13); color: var(--secondary-text-color); }
 
   /* ---- rotation advice ----
      An \`ha-alert\`: it is Home Assistant's component for this case, it carries
      its icon, its colour and its contrast already, and it will follow the theme
      without our having to know. All that is left is to place it. */
-  .advice { display: block; margin: 0 16px 14px; }
+  .advice { display: block; margin: 0 var(--fp-s4) var(--fp-s4); }
   .advice[hidden] { display: none; }
 
   /* ---- the pressures, drawn as the car is ---- */
@@ -1696,25 +1633,25 @@ const CARD_STYLE = `
   .tpms {
     display: grid;
     grid-template-columns: 1fr 1fr;
-    gap: 6px;
-    margin: 0 16px 14px;
+    gap: var(--fp-sh);
+    margin: 0 var(--fp-s4) var(--fp-s4);
   }
   .tpms .wheel {
     display: flex;
     align-items: baseline;
-    gap: 6px;
-    padding: 7px 10px;
-    border-radius: 8px;
+    gap: var(--fp-sh);
+    padding: var(--fp-s2) var(--fp-s3);
+    border-radius: var(--fp-ctl-r);
     background: var(--secondary-background-color);
   }
   .tpms .corner {
-    font-size: 10px;
+    font-size: var(--f-10);
     font-weight: 700;
     letter-spacing: .5px;
     color: var(--secondary-text-color);
   }
   /* The pressure is the datum: it carries the size and the weight. */
-  .tpms .p { font-size: 16px; font-weight: 500; font-variant-numeric: tabular-nums; }
+  .tpms .p { font-size: var(--f-16); font-weight: 500; font-variant-numeric: tabular-nums; }
   /* The second member, one per wheel only: temperature usually, low battery or
      silence when there is one — see \`#wheelAside\`. */
   .tpms .t {
@@ -1722,18 +1659,18 @@ const CARD_STYLE = `
     align-items: center;
     gap: .3em;
     margin-left: auto;
-    font-size: 12px;
+    font-size: var(--f-12);
     color: var(--secondary-text-color);
     font-variant-numeric: tabular-nums;
     --mdc-icon-size: 14px;
   }
-  .tpms .t.alarm { color: var(--warning-color, #ffa726); }
+  .tpms .t.alarm { color: var(--fp-warn); }
   /* Red is kept for the tyre called wrong — by the dock or by the target. Amber
      says "the sensor has a problem", red says "the tyre has one": two flags,
      never one. */
-  .tpms .t.danger { color: var(--error-color, #db4437); }
-  .tpms .wheel.alarm { box-shadow: inset 0 0 0 1px var(--error-color, #db4437); }
-  .tpms .wheel.alarm .p { color: var(--error-color, #db4437); }
+  .tpms .t.danger { color: var(--fp-bad); }
+  .tpms .wheel.alarm { box-shadow: inset 0 0 0 1px var(--fp-bad); }
+  .tpms .wheel.alarm .p { color: var(--fp-bad); }
   /* A dead cell leaves the last value in place and says nothing. The corner is
      therefore greyed rather than showing a three-month-old pressure as though
      it were today's. */
@@ -1745,9 +1682,9 @@ const CARD_STYLE = `
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 12px;
-    margin: 4px 16px 6px;
-    font-size: 12px;
+    gap: var(--fp-s3);
+    margin: var(--fp-s1) var(--fp-s4) var(--fp-sh);
+    font-size: var(--f-12);
     font-weight: 500;
     letter-spacing: .06em;
     text-transform: uppercase;
@@ -1761,8 +1698,8 @@ const CARD_STYLE = `
     display: grid;
     grid-template-columns: 30px 1fr auto;
     align-items: center;
-    gap: 10px;
-    padding: 9px 16px;
+    gap: var(--fp-s3);
+    padding: var(--fp-s2) var(--fp-s4);
     border-top: 1px solid var(--divider-color);
     transition: background 140ms ease;
     -webkit-tap-highlight-color: transparent;
@@ -1770,11 +1707,11 @@ const CARD_STYLE = `
   }
   .row[role="button"] { cursor: pointer; }
   .row[role="button"]:hover { background: var(--secondary-background-color); }
-  .row:focus-visible { outline: 2px solid var(--primary-color); outline-offset: -2px; }
+  .row:focus-visible { outline: var(--fp-focus); outline-offset: -2px; }
   .row .ic {
     width: 30px;
     height: 30px;
-    border-radius: 8px;
+    border-radius: var(--fp-ctl-r);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1782,18 +1719,18 @@ const CARD_STYLE = `
     color: var(--tint-ink);
     --mdc-icon-size: 17px;
   }
-  .row .name { font-size: 14px; font-weight: 500; line-height: 1.25; }
-  .row .meta { font-size: 12px; color: var(--secondary-text-color); }
+  .row .name { font-size: var(--f-14); font-weight: 500; line-height: 1.25; }
+  .row .meta { font-size: var(--f-12); color: var(--secondary-text-color); }
   .row .val {
     text-align: right;
-    font-size: 14px;
+    font-size: var(--f-14);
     font-weight: 500;
     font-variant-numeric: tabular-nums;
     white-space: nowrap;
   }
   .row .state {
     display: block;
-    font-size: 12px;
+    font-size: var(--f-12);
     font-weight: 400;
     color: var(--secondary-text-color);
   }
@@ -1804,15 +1741,15 @@ const CARD_STYLE = `
     display: inline-flex;
     align-items: center;
     gap: .3em;
-    margin-top: 3px;
-    padding: 1px 8px;
-    border-radius: 999px;
-    font-size: 12px;
+    margin-top: var(--fp-s1);
+    padding: 1px var(--fp-s2);
+    border-radius: var(--fp-pill-r);
+    font-size: var(--f-12);
     font-weight: 500;
     white-space: nowrap;
     color: var(--primary-text-color);
-    border: 1px solid color-mix(in srgb, var(--warning-color, #ffa726) 55%, transparent);
-    background: color-mix(in srgb, var(--warning-color, #ffa726) 15%, transparent);
+    border: 1px solid color-mix(in srgb, var(--fp-warn) 55%, transparent);
+    background: color-mix(in srgb, var(--fp-warn) 15%, transparent);
     --mdc-icon-size: 13px;
   }
   .pill.quiet {
@@ -1827,12 +1764,12 @@ const CARD_STYLE = `
   .bar {
     grid-column: 2 / 4;
     height: 3px;
-    border-radius: 2px;
-    margin-top: 5px;
+    border-radius: var(--fp-field-r);
+    margin-top: var(--fp-sh);
     background: var(--divider-color);
     overflow: hidden;
   }
-  .bar i { display: block; height: 100%; border-radius: 2px; background: var(--tint); }
+  .bar i { display: block; height: 100%; border-radius: var(--fp-field-r); background: var(--tint); }
 
   .row.is-mounted { background: color-mix(in srgb, var(--tint) 9%, transparent); }
   .row.is-mounted .state { color: var(--primary-text-color); }
@@ -1843,7 +1780,7 @@ const CARD_STYLE = `
      for whoever does not perceive it. */
   .row.is-retired {
     border-left: 3px solid var(--secondary-text-color);
-    padding-left: 13px;
+    padding-left: var(--fp-s3);
     background: repeating-linear-gradient(
       -45deg,
       transparent 0 6px,
@@ -1859,10 +1796,10 @@ const CARD_STYLE = `
   .row.is-retired .val { opacity: .6; }
   .row.is-retired .state {
     display: inline-block;
-    margin-top: 2px;
-    padding: 1px 6px;
+    margin-top: var(--fp-s0);
+    padding: 1px var(--fp-sh);
     border: 1px solid var(--secondary-text-color);
-    border-radius: 8px;
+    border-radius: var(--fp-ctl-r);
     opacity: .85;
   }
   .row.is-retired .bar { display: none; }
@@ -1876,14 +1813,14 @@ const CARD_STYLE = `
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 8px;
-    height: 40px;
-    padding: 0 20px;
+    gap: var(--fp-s2);
+    height: var(--fp-ctl-h);
+    padding: 0 var(--fp-s5);
     border: 1px solid var(--divider-color);
-    border-radius: 999px;
+    border-radius: calc(var(--fp-ctl-h) / 2);
     cursor: pointer;
     font: inherit;
-    font-size: 14px;
+    font-size: var(--f-14);
     font-weight: 500;
     background: var(--card-background-color);
     color: var(--primary-text-color);
@@ -1909,8 +1846,8 @@ const CARD_STYLE = `
   .links {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    margin: 4px 16px 4px;
+    gap: var(--fp-s2);
+    margin: var(--fp-s1) var(--fp-s4) var(--fp-s1);
   }
 
   /* ---- the card's menu ----
@@ -1924,8 +1861,8 @@ const CARD_STYLE = `
     position: fixed;
     min-width: 216px;
     max-width: calc(100vw - 16px);
-    padding: 8px 0;
-    border-radius: 12px;
+    padding: var(--fp-s2) 0;
+    border-radius: var(--ha-card-border-radius, 12px);
     background: var(--ha-card-background, var(--card-background-color));
     border: 1px solid var(--divider-color);
     box-shadow: 0 4px 6px rgba(0, 0, 0, .12), 0 12px 28px rgba(0, 0, 0, .18);
@@ -1933,13 +1870,13 @@ const CARD_STYLE = `
   .cardmenu .mi {
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: var(--fp-s4);
     width: 100%;
-    padding: 10px 16px;
+    padding: var(--fp-s3) var(--fp-s4);
     border: none;
     background: none;
     font: inherit;
-    font-size: 14px;
+    font-size: var(--f-14);
     text-align: left;
     color: var(--primary-text-color);
     cursor: pointer;
@@ -1947,7 +1884,7 @@ const CARD_STYLE = `
   }
   .cardmenu .mi ha-icon { flex: 0 0 auto; color: var(--secondary-text-color); }
   .cardmenu .mi .mt { flex: 1; min-width: 0; }
-  .cardmenu .mi .mv { font-size: 13px; color: var(--secondary-text-color); }
+  .cardmenu .mi .mv { font-size: var(--f-13); color: var(--secondary-text-color); }
   .cardmenu .mi:hover:not([disabled]) {
     background: color-mix(in srgb, var(--primary-text-color) 7%, transparent);
   }
@@ -1955,7 +1892,7 @@ const CARD_STYLE = `
      it stays readable — a half tone would make it look like an option one is
      entitled to switch on. */
   .cardmenu .mi[disabled] { cursor: default; }
-  .cardmenu .msep { height: 1px; margin: 7px 0; background: var(--divider-color); }
+  .cardmenu .msep { height: 1px; margin: var(--fp-s2) 0; background: var(--divider-color); }
 
   /* ---- a set's sheet ----
 
@@ -1964,12 +1901,12 @@ const CARD_STYLE = `
      the width of a sheet, which allows naming them and grouping them by what
      they touch — the record, the sensors, the count — instead of lining them
      up in order of arrival. */
-  .tid { display: flex; align-items: center; gap: 12px; margin-bottom: 4px; }
+  .tid { display: flex; align-items: center; gap: var(--fp-s3); margin-bottom: var(--fp-s1); }
   .tid .mark {
     flex: 0 0 auto;
     width: 40px;
     height: 40px;
-    border-radius: 12px;
+    border-radius: var(--ha-card-border-radius, 12px);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1978,40 +1915,40 @@ const CARD_STYLE = `
     --mdc-icon-size: 22px;
   }
   .tid .txt { min-width: 0; }
-  .tid .nm { font-size: 16px; font-weight: 500; line-height: 1.2; }
+  .tid .nm { font-size: var(--f-16); font-weight: 500; line-height: 1.2; }
   .tid .st {
-    margin-top: 2px;
-    font-size: 13px;
+    margin-top: var(--fp-s0);
+    font-size: var(--f-13);
     color: var(--secondary-text-color);
     font-variant-numeric: tabular-nums;
   }
 
-  .verbs { display: flex; flex-wrap: wrap; gap: 8px; margin: 14px 0 4px; }
+  .verbs { display: flex; flex-wrap: wrap; gap: var(--fp-s2); margin: var(--fp-s4) 0 var(--fp-s1); }
 
   /* One block per thing one may want to change, and one verb per block. The
      body says what the block holds today: without it the verb would open a
      form to answer a question one has not yet asked. */
   .tblock {
-    margin-top: 14px;
-    padding-top: 12px;
+    margin-top: var(--fp-s4);
+    padding-top: var(--fp-s3);
     border-top: 1px solid var(--divider-color);
   }
   .tblock .hd {
     display: flex;
     align-items: baseline;
     justify-content: space-between;
-    gap: 12px;
+    gap: var(--fp-s3);
   }
   .tblock .ttl {
-    font-size: 12px;
+    font-size: var(--f-12);
     font-weight: 700;
     letter-spacing: .6px;
     text-transform: uppercase;
     color: var(--secondary-text-color);
   }
   .tblock .bd {
-    margin-top: 5px;
-    font-size: 13px;
+    margin-top: var(--fp-sh);
+    font-size: var(--f-13);
     line-height: 1.5;
     color: var(--secondary-text-color);
   }
@@ -2027,22 +1964,22 @@ const CARD_STYLE = `
     padding: 0;
     cursor: pointer;
     font: inherit;
-    font-size: 13px;
+    font-size: var(--f-13);
     font-weight: 500;
     color: var(--primary-color);
     white-space: nowrap;
   }
   .lnk:hover { text-decoration: underline; }
-  .lnk:focus-visible { outline: 2px solid var(--primary-color); outline-offset: 2px; }
+  .lnk:focus-visible { outline: var(--fp-focus); outline-offset: var(--fp-focus-off); }
 
   /* The rare and the consequential, at the end of the sheet: readable, but
      without a button's relief — one does not lean on it by accident. */
   .tmore {
     display: flex;
     flex-wrap: wrap;
-    gap: 4px 14px;
-    margin-top: 14px;
-    padding-top: 11px;
+    gap: var(--fp-s1) var(--fp-s4);
+    margin-top: var(--fp-s4);
+    padding-top: var(--fp-s3);
     border-top: 1px solid var(--divider-color);
   }
   .tmore .lnk { font-weight: 500; color: var(--secondary-text-color); }
@@ -2051,31 +1988,31 @@ const CARD_STYLE = `
   /* The confirmation inset. It takes the place of the verbs rather than opening
      over them: a gesture is confirmed where it was asked for. */
   .confirm {
-    margin: 14px 0 4px;
-    padding: 12px;
-    border-radius: 12px;
+    margin: var(--fp-s4) 0 var(--fp-s1);
+    padding: var(--fp-s3);
+    border-radius: var(--ha-card-border-radius, 12px);
     background: var(--secondary-background-color);
     border: 1px solid var(--divider-color);
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: var(--fp-s3);
   }
   .confirm.danger { border-color: color-mix(in srgb, var(--error-color) 35%, transparent); }
-  .confirm .say { font-size: 13px; line-height: 1.5; }
+  .confirm .say { font-size: var(--f-13); line-height: 1.5; }
   .confirm .say b { font-weight: 500; }
-  .confirm .fld { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .confirm .fld { display: flex; align-items: center; gap: var(--fp-s2); font-size: var(--f-13); }
   .confirm input {
     width: 110px;
-    padding: 6px 9px;
-    border-radius: 8px;
+    padding: var(--fp-sh) var(--fp-s2);
+    border-radius: var(--fp-ctl-r);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--f-13);
     font-variant-numeric: tabular-nums;
     color: var(--primary-text-color);
     background: var(--card-background-color);
     border: 1px solid var(--divider-color);
   }
-  .confirm .acts { display: flex; flex-wrap: wrap; gap: 8px; }
+  .confirm .acts { display: flex; flex-wrap: wrap; gap: var(--fp-s2); }
 
   /* ---- the sheets ----
 
@@ -2095,14 +2032,14 @@ const CARD_STYLE = `
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 16px;
+    padding: var(--fp-s4);
     background: rgba(0, 0, 0, .45);
   }
   .sheet {
     width: min(480px, 100%);
     max-height: min(86vh, 720px);
     overflow: auto;
-    padding: 20px;
+    padding: var(--fp-s5);
     border-radius: var(--ha-card-border-radius, 16px);
     background: var(--ha-card-background, var(--card-background-color));
     color: var(--primary-text-color);
@@ -2112,19 +2049,19 @@ const CARD_STYLE = `
     --tint: var(--primary-color);
   }
   .sheet:focus-visible { outline: none; }
-  .sheet h2 { margin: 0; font-size: 17px; font-weight: 500; }
+  .sheet h2 { margin: 0; font-size: var(--f-17); font-weight: 500; }
 
   /* The header. The chevron only appears from the second floor up: on the
      first there is nothing behind, and a back arrow that closes would read as a
      cancel in disguise. */
-  .shead { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; }
+  .shead { display: flex; align-items: center; gap: var(--fp-s3); margin-bottom: var(--fp-s4); }
   .shead .tid { flex: 1; min-width: 0; margin-bottom: 0; }
   .shead h2 { flex: 1; min-width: 0; }
   .back {
     flex: 0 0 auto;
     width: 32px;
     height: 32px;
-    margin-left: -5px;
+    margin-left: -var(--fp-sh);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -2138,85 +2075,53 @@ const CARD_STYLE = `
   .back:hover { background: var(--secondary-background-color); color: var(--primary-text-color); }
 
   .sheet .desc {
-    margin: 0 0 14px;
-    font-size: 13px;
+    margin: 0 0 var(--fp-s4);
+    font-size: var(--f-13);
     line-height: 1.45;
     color: var(--secondary-text-color);
   }
-  /* The flow's paragraphs, rendered one by one: \`pre-wrap\` on the whole block
-     turned the markdown's line breaks into doubled vertical gaps. */
-  .sheet .desc p { margin: 0 0 8px; }
+  /* Written as paragraphs rather than as one block: \`pre-wrap\` on the whole
+     turned every line break into a doubled vertical gap. */
+  .sheet .desc p { margin: 0 0 var(--fp-s2); }
   .sheet .desc p:last-child { margin-bottom: 0; }
-  .sheet .desc ul { margin: 0 0 8px; padding-left: 18px; }
-  .sheet .desc li { margin: 2px 0; }
+  .sheet .desc ul { margin: 0 0 var(--fp-s2); padding-left: var(--fp-s4); }
+  .sheet .desc li { margin: var(--fp-s0) 0; }
   .sheet .desc strong { color: var(--primary-text-color); font-weight: 500; }
-  .sheet .err {
-    margin: 0 0 13px;
-    padding: 9px 11px;
-    border-radius: 8px;
-    font-size: 13px;
-    line-height: 1.45;
-    color: var(--error-color);
-    background: color-mix(in srgb, var(--error-color) 12%, transparent);
-  }
-  .sheet ha-form { display: block; }
-  .sheet .menu { display: flex; flex-direction: column; gap: 8px; }
-  .sheet .menu .act { justify-content: flex-start; height: 40px; border-radius: 12px; }
-  .sheet-foot { display: flex; justify-content: flex-end; gap: 8px; margin-top: 20px; }
+  .sheet-foot { display: flex; justify-content: flex-end; gap: var(--fp-s2); margin-top: var(--fp-s5); }
   /* A form's footer carries the gesture: taller than the pills of a list row,
      which have to efface themselves. */
-  .sheet-foot .act { height: 36px; padding: 0 16px; }
+  .sheet-foot .act { height: 36px; padding: 0 var(--fp-s4); }
   .act[disabled] { opacity: .5; cursor: default; }
 
-  /* ---- the fields ----
+  /* ---- a field, on the sheets that still ask for one ----
 
-     The name above, the help below, and the help only when it teaches
-     something. The flow writes one under each of its nine fields — which is
-     right in a settings page read once, but here it drowns the three that
-     needed it. The others move into the box as an example, where the eye
-     already is. */
-  .fset { display: flex; flex-direction: column; gap: 15px; }
-  .fld2 .lb {
-    display: block;
-    margin-bottom: 6px;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: .55px;
-    text-transform: uppercase;
-    color: var(--secondary-text-color);
-  }
-  .fld2 .lb .opt {
-    margin-left: 7px;
-    font-weight: 500;
-    letter-spacing: 0;
-    text-transform: none;
-    opacity: .75;
-  }
-  .fld2 .hp { margin-top: 6px; font-size: 12px; line-height: 1.45; color: var(--secondary-text-color); }
-  .fld2 .no { margin-top: 6px; font-size: 12px; line-height: 1.45; color: var(--error-color); }
-  .fld2.wrong .lb { color: var(--error-color); }
+     One remains: the odometer's. Its name is not written above it — the sheet
+     it sits on asks for nothing else — but the line below is, because it is
+     what says whether the figure just typed will be accepted. */
+  .fld2 .hp { margin-top: var(--fp-sh); font-size: var(--f-12); line-height: 1.45; color: var(--secondary-text-color); }
+  .fld2 .no { margin-top: var(--fp-sh); font-size: var(--f-12); line-height: 1.45; color: var(--error-color); }
   .fld2.wrong .tx { border-color: var(--error-color); }
 
   .tx {
     width: 100%;
     box-sizing: border-box;
     height: 40px;
-    padding: 0 11px;
-    border-radius: 12px;
+    padding: 0 var(--fp-s3);
+    border-radius: var(--ha-card-border-radius, 12px);
     border: 1px solid var(--divider-color);
     background: var(--card-background-color);
     color: var(--primary-text-color);
     font: inherit;
-    font-size: 14px;
+    font-size: var(--f-14);
   }
   .tx::placeholder { color: var(--secondary-text-color); opacity: .5; }
   .tx:focus { border-color: var(--primary-color); }
   input.tx[type="number"] { font-variant-numeric: tabular-nums; }
   /* A number carries its unit on the right, outside the box: inside, it would
      be wiped out by the first keystroke. */
-  .unit { display: flex; align-items: center; gap: 9px; }
+  .unit { display: flex; align-items: center; gap: var(--fp-s2); }
   .unit .tx { flex: 1; min-width: 0; text-align: right; }
-  .unit .u { flex: 0 0 auto; font-size: 13px; font-weight: 500; color: var(--secondary-text-color); }
+  .unit .u { flex: 0 0 auto; font-size: var(--f-13); font-weight: 500; color: var(--secondary-text-color); }
 
   /* ---- an odometer's leaps ----
 
@@ -2225,197 +2130,24 @@ const CARD_STYLE = `
      right for an adjustment and absurd for a reading: these buttons give the
      leaps one actually makes, and the field stays free for the exact figure
      read off the dashboard. */
-  .quick { display: flex; gap: 7px; margin-top: 9px; }
+  .quick { display: flex; gap: var(--fp-s2); margin-top: var(--fp-s2); }
   .quick .qk {
     flex: 1 1 0;
     min-width: 0;
-    height: 34px;
+    height: var(--fp-pill-h);
     border: 1px solid var(--divider-color);
-    border-radius: 999px;
+    border-radius: var(--fp-pill-r);
     background: var(--card-background-color);
     color: var(--primary-text-color);
     font: inherit;
-    font-size: 13px;
+    font-size: var(--f-13);
     font-weight: 500;
     font-variant-numeric: tabular-nums;
     cursor: pointer;
   }
   .quick .qk:hover { border-color: var(--primary-color); }
 
-  /* ---- choice, as chips ----
-
-     Three seasons, two quantities, two axles: lists of two or three entries,
-     all visible. The chip carries the icon and the shade that same choice will
-     have everywhere else on the card — on the floor-plan badge, in the list, in
-     the header. That is where the form stops being a form: one does not read
-     "winter", one recognises the blue snowflake. */
-  .seg { display: flex; gap: 7px; }
-  .seg .opt {
-    flex: 1 1 0;
-    min-width: 0;
-    min-height: 54px;
-    padding: 8px 6px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 3px;
-    border: 1px solid var(--divider-color);
-    border-radius: 12px;
-    background: var(--card-background-color);
-    color: var(--primary-text-color);
-    font: inherit;
-    font-size: 13px;
-    font-weight: 500;
-    line-height: 1.2;
-    text-align: center;
-    cursor: pointer;
-    --mdc-icon-size: 19px;
-  }
-  .seg .opt .sub { font-size: 12px; font-weight: 500; color: var(--secondary-text-color); }
-  .seg .opt:hover { border-color: var(--pick, var(--tint)); }
-  /* The chosen option does not hang on colour alone: the double rule gives it
-     as well to whoever cannot tell blue from green. */
-  .seg .opt[aria-pressed="true"] {
-    border-color: var(--pick, var(--tint));
-    box-shadow: inset 0 0 0 1px var(--pick, var(--tint));
-    background: color-mix(in srgb, var(--pick, var(--tint)) 13%, transparent);
-    /* The rule carries the full shade, the text does not: on a background at
-       13 % of the same colour, the summer set's amber would not read. */
-    color: color-mix(in srgb, var(--pick, var(--tint)) 50%, var(--primary-text-color));
-  }
-  .seg .opt[aria-pressed="true"] .sub { color: inherit; opacity: .8; }
-
-  /* ---- the groups ---- */
-  .grp + .grp { margin-top: 16px; padding-top: 15px; border-top: 1px solid var(--divider-color); }
-  .grp .gt {
-    margin-bottom: 12px;
-    font-size: 12px;
-    font-weight: 700;
-    letter-spacing: .6px;
-    text-transform: uppercase;
-    color: var(--secondary-text-color);
-  }
-  .grp .gd { margin: -7px 0 12px; font-size: 12px; line-height: 1.45; color: var(--secondary-text-color); }
-  /* A group that undoes something elsewhere. It does not hide in a fold and is
-     not confused with the rest of the form: what one answers there takes a set
-     off the car. */
-  .grp.warn {
-    margin-top: 16px;
-    padding: 13px;
-    border: 1px solid rgba(255, 167, 38, .35);
-    border-radius: 12px;
-    background: rgba(255, 167, 38, .10);
-  }
-
-  /* ---- what is not always filled in ----
-     Five optional fields out of nine. Showing them from the start makes a wall
-     where nothing stands out; hiding them would make them unfindable. A fold,
-     then, which says what it holds rather than "Options". */
-  .fold { margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--divider-color); }
-  .fold > summary {
-    display: flex;
-    align-items: center;
-    gap: 5px;
-    list-style: none;
-    cursor: pointer;
-    font-size: 13px;
-    font-weight: 500;
-    color: var(--primary-color);
-  }
-  .fold > summary::-webkit-details-marker { display: none; }
-  .fold > summary ha-icon { --mdc-icon-size: 18px; transition: transform 140ms ease; }
-  .fold[open] > summary ha-icon { transform: rotate(90deg); }
-  .fold .fset { margin-top: 15px; }
-
-  /* ---- the plan of the car ----
-
-     The sensors are attached where the pressures are read: same grid, same
-     order, front at the top. The list "Front left / Front right / …" required
-     rereading the label at every row to know which wheel was meant, when the
-     layout says it on its own. */
-  .car {
-    position: relative;
-    margin-top: 8px;
-    padding: 16px 13px 13px;
-    border: 1px solid var(--divider-color);
-    border-radius: 16px;
-  }
-  .car::before {
-    /* The word comes from the element: a frozen CSS content speaks one language. */
-    content: attr(data-front);
-    position: absolute;
-    top: -7px;
-    left: 15px;
-    padding: 0 6px;
-    background: var(--ha-card-background, var(--card-background-color));
-    font-size: 9px;
-    font-weight: 700;
-    letter-spacing: .7px;
-    color: var(--secondary-text-color);
-  }
-  .car .axles { display: grid; grid-template-columns: 1fr 1fr; gap: 13px 10px; }
-  .car .slot { min-width: 0; }
-  .car .slot .cn {
-    margin-bottom: 5px;
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: .5px;
-    color: var(--secondary-text-color);
-  }
-  .car ha-selector { display: block; }
-  /* A whole axle, when it is the axle that is meant and not a wheel. */
-  .car .half {
-    grid-column: 1 / -1;
-    display: flex;
-    align-items: center;
-    gap: 11px;
-    padding: 11px;
-    border: 1px solid var(--divider-color);
-    border-radius: 12px;
-    background: var(--card-background-color);
-    color: inherit;
-    font: inherit;
-    text-align: left;
-    cursor: pointer;
-    --mdc-icon-size: 20px;
-  }
-  .car .half ha-icon { flex: 0 0 auto; color: var(--secondary-text-color); }
-  .car .half .hw { flex: 1; min-width: 0; }
-  .car .half .hn { font-size: 13px; font-weight: 500; }
-  .car .half .hs { margin-top: 2px; font-size: 12px; line-height: 1.4; color: var(--secondary-text-color); }
-  .car .half[aria-pressed="true"] {
-    border-color: var(--tint);
-    box-shadow: inset 0 0 0 1px var(--tint);
-    background: color-mix(in srgb, var(--tint) 12%, transparent);
-  }
-  .car .half[aria-pressed="true"] ha-icon { color: var(--tint-ink); }
-
-  /* ---- two readings that contradict each other ----
-     The two figures side by side: it is the gap between them that makes the
-     decision, and a checkbox does not show it. */
-  .versus { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 2px 0 14px; }
-  .versus .fig { padding: 12px; border-radius: 12px; background: var(--secondary-background-color); }
-  .versus .fig .k {
-    font-size: 10px;
-    font-weight: 700;
-    letter-spacing: .5px;
-    text-transform: uppercase;
-    color: var(--secondary-text-color);
-  }
-  .versus .fig .v { margin-top: 5px; font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; }
-  .versus .fig .w {
-    margin-top: 3px;
-    font-size: 11px;
-    color: var(--secondary-text-color);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .wait { font-size: 13px; color: var(--secondary-text-color); }
-
-  .empty { padding: 4px 16px 12px; font-size: 13px; color: var(--secondary-text-color); }
+  .empty { padding: var(--fp-s1) var(--fp-s4) var(--fp-s3); font-size: var(--f-13); color: var(--secondary-text-color); }
 
   /* ---- when the column tightens ----
 
@@ -2439,17 +2171,17 @@ const CARD_STYLE = `
        vertically. */
     .heroes { grid-template-columns: 1fr; }
     .tpms { grid-template-columns: 1fr; }
-    .km { font-size: 22px; }
+    .km { font-size: var(--f-20); }
     .hero .mark { width: 36px; height: 36px; --mdc-icon-size: 20px; }
     .row { grid-template-columns: 30px 1fr; }
     .row .val {
       grid-column: 2;
-      margin-top: 2px;
+      margin-top: var(--fp-s0);
       text-align: left;
       display: flex;
       flex-wrap: wrap;
       align-items: center;
-      gap: 3px 8px;
+      gap: var(--fp-s1) var(--fp-s2);
     }
     .row .state { display: inline; }
     .row .pill { margin-top: 0; }
@@ -2457,16 +2189,11 @@ const CARD_STYLE = `
   }
 
   button:focus-visible, input:focus-visible {
-    outline: 2px solid var(--primary-color);
-    outline-offset: 2px;
+    outline: var(--fp-focus);
+    outline-offset: var(--fp-focus-off);
   }
   @media (prefers-reduced-motion: reduce) { .row { transition: none; } }
 `;
-
-/* ---------- the flow, driven without being shown ---------- */
-
-/** The REST path of the options flow: the one behind the "Configure" button. */
-const FLOW_PATH = "config/config_entries/options/flow";
 
 /** A word in HA's toast: that is where the interface already puts its acknowledgements. */
 function notify(el, message) {
@@ -2475,515 +2202,6 @@ function notify(el, message) {
   );
 }
 
-/**
- * Makes `ha-form` and `ha-selector` available outside an editor.
- *
- * The components exist in the frontend, but their chunk is only loaded when a
- * card opens its editor. So we ask HA to build the editor of a core card,
- * which pulls them along. Without this, `document.createElement("ha-selector")`
- * would render an empty box.
- *
- * `ha-selector` is the only HA control the card keeps: picking one entity out
- * of two thousand calls for a search, a filter by domain and a preview of the
- * state. Rebuilding it would be doing it again, worse, and the user knows it
- * already — it is the same picker as everywhere else in their house.
- */
-let formLoading = null;
-function loadHaForm() {
-  if (customElements.get("ha-form")) return Promise.resolve();
-  if (!formLoading) {
-    formLoading = (async () => {
-      const helpers = await window.loadCardHelpers?.();
-      const card = await helpers?.createCardElement?.({ type: "entities", entities: [] });
-      await card?.constructor?.getConfigElement?.();
-    })().catch(() => {});
-  }
-  return formLoading;
-}
-
-/**
- * A flow form's starting values.
- *
- * The schema carries them already: `default` for what the flow imposes,
- * `description.suggested_value` for what it proposes. `ha-form` invents
- * nothing on its own, it is up to the caller to hand it that initial state.
- */
-function initialFlowData(schema) {
-  const data = {};
-  for (const field of schema ?? []) {
-    const suggested = field.description?.suggested_value;
-    if (suggested !== undefined && suggested !== null) data[field.name] = suggested;
-    else if (field.default !== undefined) data[field.name] = field.default;
-  }
-  return data;
-}
-
-/**
- * The markdown of the flow's descriptions, rendered into a given element.
- *
- * Home Assistant's native dialog passes these texts to `ha-markdown`: what
- * they hold is therefore markdown, and showing it as `textContent` would
- * display the asterisks and the dashes. Only what the flow actually uses is
- * rendered — paragraphs, bullet lists, bold — because a complete engine for
- * three marks would be one more dependency to follow.
- *
- * Everything goes through text nodes: nothing coming from the flow is ever
- * interpreted as markup, even if a tyre reference one day comes to contain
- * angle brackets.
- */
-function renderMarkdown(source, into) {
-  const bold = (text, parent) => {
-    // The odd segments are the ones between two pairs of asterisks.
-    text.split(/\*\*/).forEach((part, i) => {
-      if (!part) return;
-      if (i % 2) {
-        const strong = document.createElement("strong");
-        strong.textContent = part;
-        parent.appendChild(strong);
-      } else {
-        parent.appendChild(document.createTextNode(part));
-      }
-    });
-  };
-
-  for (const block of String(source).split(/\n{2,}/)) {
-    const lines = block.split("\n").filter((line) => line.trim());
-    if (!lines.length) continue;
-
-    if (lines.every((line) => /^\s*-\s+/.test(line))) {
-      const ul = document.createElement("ul");
-      for (const line of lines) {
-        const li = document.createElement("li");
-        bold(line.replace(/^\s*-\s+/, ""), li);
-        ul.appendChild(li);
-      }
-      into.appendChild(ul);
-      continue;
-    }
-
-    const p = document.createElement("p");
-    bold(lines.join(" "), p);
-    into.appendChild(p);
-  }
-}
-
-/** What a REST call fails to say about itself. */
-function flowError(err) {
-  if (!err) return t("card.unknown_error");
-  if (typeof err === "string") return err;
-  return err.body?.message || err.message || err.error || t("card.unknown_error");
-}
-
-/**
- * The vehicle's options flow, driven by the card — and never shown.
- *
- * Home Assistant exposes over REST the same flow the integration page opens as
- * a dialog: `POST config/config_entries/options/flow` with the vehicle's
- * `entry_id`. The card therefore drives it itself, but shows none of its
- * screens: it reads a step's schema to know what to ask and with what starting
- * values, draws its own fields, and posts what was entered back under the same
- * names.
- *
- * What is gained is coherence — a card's form looks like the card. What is not
- * lost is the rule: what a DOT code may be worth, what an occupied axle
- * forbids, what an odometer going backwards imposes, all of it stays written
- * once, in Python, and serves Settings as well as the card. An error comes back
- * through `errors`, against a field name, and lands under the right field
- * without the card knowing what it says.
- *
- * `path` walks through, without showing them, the steps that lead where one
- * wanted to go: the flow's menu, then the choice of set. Three screens crossed
- * to reach "edit the record", which makes sense from Settings — one arrives
- * there without knowing what one is after — and none at all from a row of the
- * card, where the set has already been pointed at.
- */
-class Flow {
-  #hass;
-  #entryId;
-  #id = null;
-  #step = null;
-
-  constructor(hass, entryId) {
-    this.#hass = hass;
-    this.#entryId = entryId;
-  }
-
-  set hass(hass) {
-    this.#hass = hass;
-  }
-
-  get hass() {
-    return this.#hass;
-  }
-
-  get step() {
-    return this.#step;
-  }
-
-  /** A translation key of the flow, where the native dialog reads it. */
-  t(key, placeholders) {
-    return this.#hass?.localize?.(`component.${DOMAIN}.options.${key}`, placeholders);
-  }
-
-  /** A list option: they live under `selector`, outside the flow's tree. */
-  option(key) {
-    return this.#hass?.localize?.(`component.${DOMAIN}.selector.${key}`);
-  }
-
-  /** Opens the flow and walks down to the step aimed at. */
-  async open(path = []) {
-    await loadHaForm();
-    // The flow's labels live on the server side: without this load, the keys
-    // would be displayed as they are.
-    await Promise.all([
-      this.#hass.loadBackendTranslation?.("options", DOMAIN),
-      this.#hass.loadBackendTranslation?.("selector", DOMAIN),
-    ]).catch(() => {});
-
-    this.#step = await this.#hass.callApi("POST", FLOW_PATH, { handler: this.#entryId });
-    this.#id = this.#step?.flow_id ?? null;
-
-    for (const payload of path) {
-      if (!this.#id || this.ended) break;
-      await this.send(payload);
-    }
-    return this.#step;
-  }
-
-  async send(payload) {
-    if (!this.#id) return this.#step;
-    this.#step = await this.#hass.callApi("POST", `${FLOW_PATH}/${this.#id}`, payload);
-    if (this.ended) this.#id = null;
-    return this.#step;
-  }
-
-  get ended() {
-    return this.#step?.type === "create_entry" || this.#step?.type === "abort";
-  }
-
-  /**
-   * The last word. An abort carries one — "Set fitted", "That set no longer
-   * exists" — and it is the flow's that is repeated, not a new one: two ways
-   * of saying the same thing end up no longer saying the same.
-   */
-  get outcome() {
-    if (this.#step?.type === "abort") {
-      return (
-        this.t(`abort.${this.#step.reason}`, this.#step.description_placeholders) ||
-        this.#step.reason
-      );
-    }
-    return null;
-  }
-
-  /**
-   * Gives up. A flow left open stays open for everybody and would surface
-   * again when the page is reloaded.
-   */
-  cancel() {
-    const id = this.#id;
-    this.#id = null;
-    if (id) this.#hass.callApi("DELETE", `${FLOW_PATH}/${id}`).catch(() => {});
-  }
-}
-
-/* ---------- the input controls ---------- */
-
-/** A field's frame: its name above, its help or its refusal below. */
-function frame({ label, optional, helper, error }, control) {
-  const el = document.createElement("div");
-  el.className = "fld2" + (error ? " wrong" : "");
-
-  if (label) {
-    const lb = document.createElement("label");
-    lb.className = "lb";
-    lb.textContent = label;
-    if (optional) {
-      const tag = document.createElement("span");
-      tag.className = "opt";
-      tag.textContent = t("field.optional");
-      lb.appendChild(tag);
-    }
-    el.appendChild(lb);
-    // The name points at the control rather than wrapping it: `ha-selector` is
-    // a component of its own, and a click on its label must open its list.
-    // `aria-labelledby` doubles the link for what is not a field in the HTML
-    // sense — a group of chips, which `for` cannot designate.
-    const id = `f-${Math.random().toString(36).slice(2, 9)}`;
-    control.id = id;
-    lb.htmlFor = id;
-    lb.id = `${id}-lb`;
-    control.setAttribute("aria-labelledby", lb.id);
-  }
-
-  el.appendChild(control);
-
-  if (error) {
-    const no = document.createElement("div");
-    no.className = "no";
-    no.textContent = error;
-    el.appendChild(no);
-  } else if (helper) {
-    const hp = document.createElement("div");
-    hp.className = "hp";
-    hp.textContent = helper;
-    el.appendChild(hp);
-  }
-  return el;
-}
-
-/** A text box. */
-function textControl(value, { placeholder, onInput }) {
-  const el = document.createElement("input");
-  el.type = "text";
-  el.className = "tx";
-  el.value = value ?? "";
-  if (placeholder) el.placeholder = placeholder;
-  el.addEventListener("input", () => onInput(el.value));
-  return el;
-}
-
-/**
- * A number and its unit.
- *
- * The arrows' step comes from the field described, and not from the browser: a
- * mileage is read off by hundreds where a pressure is set by tenths, and the
- * step of one the browser assumes only suits the second. Without `step`, that
- * step of one remains — it is the right default for everything counted small.
- */
-function numberControl(value, { unit, step, onInput }) {
-  const el = document.createElement("div");
-  el.className = "unit";
-  const input = document.createElement("input");
-  input.type = "number";
-  input.className = "tx";
-  input.inputMode = "decimal";
-  if (step) input.step = String(step);
-  input.value = value === undefined || value === null ? "" : String(value);
-  input.addEventListener("input", () => onInput(input.value === "" ? null : Number(input.value)));
-  el.appendChild(input);
-  if (unit) {
-    const u = document.createElement("span");
-    u.className = "u";
-    u.textContent = unit;
-    el.appendChild(u);
-  }
-  // The frame points at the field, not at the box containing it.
-  Object.defineProperty(el, "id", {
-    set: (id) => input.setAttribute("id", id),
-    get: () => input.getAttribute("id"),
-  });
-  return el;
-}
-
-/**
- * A choice as chips.
- *
- * Two or three options, all visible, each carrying the icon and the shade it
- * will have everywhere else on the card. A `radiogroup` and not a row of
- * buttons: the arrow keys navigate it, which a list of buttons does not do, and
- * a screen reader announces "2 of 3".
- */
-function choiceControl(value, { options, onPick }) {
-  const el = document.createElement("div");
-  el.className = "seg";
-  el.setAttribute("role", "radiogroup");
-
-  // The chips mark themselves before warning the caller: most choices do not
-  // repaint the sheet, and without this a click on "Winter" changed the value
-  // without anything on screen saying so.
-  const buttons = [];
-  const select = (picked, focus) => {
-    buttons.forEach((button, i) => {
-      const on = options[i].value === picked;
-      button.setAttribute("aria-checked", String(on));
-      button.setAttribute("aria-pressed", String(on));
-      button.tabIndex = on ? 0 : -1;
-      if (on && focus) button.focus();
-    });
-    onPick(picked);
-  };
-
-  options.forEach((option, index) => {
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "opt";
-    button.setAttribute("role", "radio");
-    const picked = option.value === value;
-    button.setAttribute("aria-checked", String(picked));
-    button.setAttribute("aria-pressed", String(picked));
-    button.dataset.value = String(option.value);
-    button.tabIndex = picked || (value === undefined && index === 0) ? 0 : -1;
-    if (option.tint) button.style.setProperty("--pick", option.tint);
-
-    if (option.icon) button.appendChild(makeIcon(option.icon));
-    const label = document.createElement("span");
-    label.textContent = option.label;
-    button.appendChild(label);
-    if (option.sub) {
-      const sub = document.createElement("span");
-      sub.className = "sub";
-      sub.textContent = option.sub;
-      button.appendChild(sub);
-    }
-
-    button.addEventListener("click", () => select(option.value, false));
-    button.addEventListener("keydown", (event) => {
-      const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[event.key];
-      if (!step) return;
-      event.preventDefault();
-      const next = options[(index + step + options.length) % options.length];
-      // Focus follows the value: a radiogroup's arrow keys move the two
-      // together, and a focus left on the old chip would get lost at the
-      // next keystroke.
-      select(next.value, true);
-    });
-    buttons.push(button);
-    el.appendChild(button);
-  });
-  return el;
-}
-
-/** Home Assistant's entity picker, inside the card's frame. */
-function entityControl(value, { hass, selector, onPick, keep }) {
-  const el = document.createElement("ha-selector");
-  el.hass = hass;
-  el.selector = selector ?? { entity: {} };
-  el.value = value ?? undefined;
-  el.addEventListener("value-changed", (event) => {
-    event.stopPropagation();
-    onPick(event.detail.value || null);
-  });
-  keep?.(el);
-  return el;
-}
-
-/**
- * What each field of the flow becomes on screen.
- *
- * The flow says *what* to ask; this table says *how*. The field's name is
- * enough to make the link — it is stable, it is the same in "add", "edit" and
- * "duplicate", and it is the only thing the card needs to know to draw
- * anything other than a text box.
- *
- * The labels are not here: they come from the flow, as in Settings, so that a
- * corrected word is corrected in both places. The help texts are — but chosen.
- * The flow writes one under each of its nine fields, which suits a page read
- * once; on a sheet, it drowns the three that needed it. The rest is better said
- * as an example inside the box, where the eye already is.
- *
- * What does not appear here is rendered by `ha-form`, as it comes: a field
- * added one day in Python will show up without the card having been touched —
- * less handsome, but present, which is better than absent.
- *
- * A factory, not an object: built when the module loads, the table froze every
- * `t(...)` in the language guessed before `hass` arrived — exactly the trap the
- * `SEASONS` accessors avoid further up. It is only read at paint time, so
- * rebuilding it then costs nothing and always speaks the language of the day.
- */
-const CONTROLS = () => ({
-  reference: { kind: "text", placeholder: "Michelin CrossClimate 2" },
-  season: {
-    kind: "choice",
-    options: Object.entries(SEASONS).map(([value, tone]) => ({
-      value,
-      label: tone.label,
-      icon: tone.icon,
-      tint: tone.tint,
-    })),
-  },
-  axle: {
-    kind: "choice",
-    options: [
-      { value: "all", label: t("axle.all"), icon: "mdi:numeric-4-box-outline" },
-      { value: "pair", label: t("axle.pair"), sub: t("help.pair"), icon: "mdi:numeric-2-box-outline" },
-    ],
-    helper: t("help.pair_note"),
-  },
-  size: { kind: "text", placeholder: "225/45 R17" },
-  dot: {
-    kind: "text",
-    placeholder: "3223",
-    helper:
-      t("help.dot"),
-  },
-  label: { kind: "text", placeholder: t("help.label") },
-  price: {
-    kind: "number",
-    unit: "€",
-    helper:
-      t("help.price"),
-  },
-  storage: { kind: "text", placeholder: t("help.storage") },
-  initial_total: {
-    kind: "number",
-    unit: "km",
-    step: 10,
-    helper: t("help.initial_total"),
-  },
-  odometer: { kind: "number", unit: "km", step: 10 },
-  total: { kind: "number", unit: "km", step: 10 },
-  vehicle: {
-    kind: "text",
-    placeholder: "Alfa GT",
-    helper: t("help.vehicle"),
-  },
-  rotation_interval: {
-    kind: "number",
-    unit: "km",
-    helper: t("help.rotation"),
-  },
-  odometer_entity: {
-    kind: "entity",
-    helper:
-      t("help.odometer_entity"),
-  },
-  position: {
-    kind: "choice",
-    options: [
-      { value: "front", label: POSITIONS.front },
-      { value: "rear", label: POSITIONS.rear },
-    ],
-  },
-  pair: {
-    kind: "choice",
-    options: [
-      {
-        value: "front",
-        label: POSITIONS.front,
-        sub: `${SHORT_SLOTS.front_left} + ${SHORT_SLOTS.front_right}`,
-      },
-      {
-        value: "rear",
-        label: POSITIONS.rear,
-        sub: `${SHORT_SLOTS.rear_left} + ${SHORT_SLOTS.rear_right}`,
-      },
-    ],
-  },
-  /* A boolean not drawn as a switch: the two answers are not "do it" and "do
-     nothing", they are two different sequels, and each deserves to be read
-     before being chosen. */
-  replace: {
-    kind: "choice",
-    label: t("help.replace"),
-    boolean: true,
-    rerender: true,
-    options: [
-      {
-        value: true,
-        label: t("help.replaced"),
-        sub: t("help.replaced_note"),
-        icon: "mdi:swap-horizontal",
-      },
-      {
-        value: false,
-        label: t("help.kept"),
-        sub: t("help.kept_note"),
-        icon: "mdi:garage-variant",
-      },
-    ],
-  },
-});
 
 /* ---------- the screens ---------- */
 
@@ -3078,937 +2296,6 @@ function linkButton(label, variant, onClick) {
   return el;
 }
 
-/**
- * The plan of the car, one wheel per slot.
- *
- * Used to designate the sensors. A set of four has its four corners; a pair has
- * only a left and a right, because the axle it sits on is not part of its
- * record — it is decided at fitting.
- */
-function carSlots(ctx) {
-  const el = document.createElement("div");
-  el.className = "car";
-  el.dataset.front = t("position.front").toUpperCase();
-  const axles = document.createElement("div");
-  axles.className = "axles";
-
-  for (const entry of ctx.step.data_schema ?? []) {
-    const slot = document.createElement("div");
-    slot.className = "slot";
-    const cn = document.createElement("div");
-    cn.className = "cn";
-    cn.textContent = SHORT_SLOTS[entry.name] ?? entry.name;
-    slot.appendChild(cn);
-    slot.appendChild(
-      entityControl(ctx.data[entry.name], {
-        hass: ctx.flow.hass,
-        selector: entry.selector,
-        onPick: (value) => ctx.set(entry.name, value),
-        keep: ctx.keep,
-      })
-    );
-    axles.appendChild(slot);
-  }
-
-  el.appendChild(axles);
-  return el;
-}
-
-/**
- * The plan of the car, one axle to designate.
- *
- * Separating a set of four means saying which half goes off to live its own
- * life. Two bands rather than a dropdown: the half chosen and the one that
- * stays each say what they become, and both are read at a glance.
- */
-function carHalves(ctx) {
-  const el = document.createElement("div");
-  el.className = "car";
-  el.dataset.field = "pair";
-  el.dataset.front = t("position.front").toUpperCase();
-  const axles = document.createElement("div");
-  axles.className = "axles";
-
-  const corners = {
-    front: `${SHORT_SLOTS.front_left} + ${SHORT_SLOTS.front_right}`,
-    rear: `${SHORT_SLOTS.rear_left} + ${SHORT_SLOTS.rear_right}`,
-  };
-  for (const axis of AXES) {
-    const picked = ctx.data.pair === axis;
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "half";
-    button.setAttribute("aria-pressed", String(picked));
-    button.appendChild(
-      makeIcon(picked ? "mdi:call-split" : "mdi:checkbox-blank-circle-outline")
-    );
-
-    const hw = document.createElement("div");
-    hw.className = "hw";
-    const hn = document.createElement("div");
-    hn.className = "hn";
-    hn.textContent = `${POSITIONS[axis]} — ${corners[axis]}`;
-    const hs = document.createElement("div");
-    hs.className = "hs";
-    hs.textContent = picked
-      ? t("help.pair_new")
-      : t("help.pair_kept");
-    hw.append(hn, hs);
-
-    button.appendChild(hw);
-    button.addEventListener("click", () => ctx.set("pair", axis, true));
-    axles.appendChild(button);
-  }
-
-  el.appendChild(axles);
-  return el;
-}
-
-/**
- * Two readings that contradict each other.
- *
- * The flow asks the question as a checkbox, which leaves three paragraphs to
- * read before one understands what is being decided. The two figures side by
- * side ask it by themselves: it is the gap between them that makes the
- * decision.
- */
-function versus(ctx) {
-  const el = document.createElement("div");
-  const ph = ctx.step.description_placeholders ?? {};
-
-  const grid = document.createElement("div");
-  grid.className = "versus";
-  const fig = (key, value, who) => {
-    const box = document.createElement("div");
-    box.className = "fig";
-    const k = document.createElement("div");
-    k.className = "k";
-    k.textContent = key;
-    const v = document.createElement("div");
-    v.className = "v";
-    v.textContent = `${value} km`;
-    const w = document.createElement("div");
-    w.className = "w";
-    w.textContent = who;
-    w.title = who;
-    box.append(k, v, w);
-    return box;
-  };
-  grid.append(
-    fig(t("resync.sensor"), ph.reading ?? "—", ph.entity ?? ""),
-    fig(t("resync.tracking"), ph.tracked ?? "—", t("help.tracked_so_far"))
-  );
-  el.appendChild(grid);
-
-  const say = document.createElement("div");
-  say.className = "desc";
-  const p = document.createElement("p");
-  p.append(
-    document.createTextNode(t("resync.no_back") + " "),
-    bold(t("resync.stuck")),
-    document.createTextNode(t("resync.forever", { tracked: ph.tracked ?? "—" }))
-  );
-  const q = document.createElement("p");
-  q.textContent =
-    t("resync.explain", {
-      tracked: ph.tracked ?? "—",
-      reading: ph.reading ?? "—",
-    });
-  say.append(p, q);
-  el.appendChild(say);
-  return el;
-}
-
-/**
- * What each step of the flow becomes as a screen.
- *
- * A step absent from this table keeps the `ha-form` rendering: that is the net,
- * and it holds on its own.
- *
- * A factory, for the same reason as `CONTROLS`: a title frozen at load time
- * would stay in the language guessed before `hass`.
- */
-const LAYOUTS = () => ({
-  add: {
-    title: t("sheet.new_set"),
-    lede: t("sheet.new_set_note"),
-    verb: t("act.add_the_set"),
-    groups: [
-      { fields: ["reference", "season", "axle"] },
-      {
-        fold: t("sheet.more_fields"),
-        fields: ["size", "dot", "label", "price", "storage", "initial_total"],
-      },
-    ],
-  },
-  edit: {
-    title: t("sheet.edit"),
-    lede: t("sheet.edit_note"),
-    verb: t("act.save"),
-    groups: [
-      { fields: ["reference", "season", "axle"] },
-      {
-        fold: t("sheet.more_fields"),
-        fields: ["size", "dot", "label", "price", "storage"],
-      },
-    ],
-  },
-  duplicate: {
-    title: t("sheet.duplicate"),
-    lede: t("sheet.duplicate_note"),
-    verb: t("act.create_copy"),
-    groups: [
-      { fields: ["reference", "season", "axle", "label"] },
-      {
-        fold: t("sheet.more_fields"),
-        fields: ["size", "dot", "price", "storage", "initial_total"],
-      },
-      {
-        title: t("sheet.on_the_car"),
-        warn: true,
-        // The group only exists if the flow offers "replace" — so only
-        // when the original is fitted. Elsewhere there is nothing to
-        // replace and the question does not arise.
-        fields: ["replace", { name: "odometer", when: (data) => data.replace !== false }],
-      },
-    ],
-  },
-  tpms: {
-    title: t("sheet.tpms"),
-    lede: t("sheet.tpms_note"),
-    verb: t("act.save"),
-    body: carSlots,
-    // The plan carries every field of the step, whatever they are: four corners
-    // for a set of 4, two sides for a pair.
-    consumes: "all",
-  },
-  separate: {
-    title: t("sheet.separate"),
-    lede: t("sheet.separate_note"),
-    verb: t("act.separate"),
-    body: carHalves,
-    consumes: ["pair"],
-    groups: [{ fields: ["label", "odometer"] }],
-  },
-  resync: {
-    title: t("sheet.resync"),
-    body: versus,
-    consumes: ["resync"],
-    /* Two named outcomes, not a "Confirm" over a ticked box: what is chosen
-       here closes a set's account, and a button has to say what it does. */
-    foot: (ctx) => [
-      actButton(t("act.keep_tracking"), null, "", () => ctx.submit({ resync: false })),
-      actButton(t("act.take_sensor"), null, "primary", () => ctx.submit({ resync: true })),
-    ],
-  },
-  vehicle: {
-    title: t("group.vehicle"),
-    verb: t("act.save"),
-    groups: [{ fields: ["vehicle", "rotation_interval"] }],
-  },
-  odometer: {
-    title: t("group.odometer_src"),
-    verb: t("act.save"),
-    groups: [{ fields: ["odometer_entity"] }],
-  },
-});
-
-/**
- * A field, from the flow's schema down to the pixel.
- *
- * The label comes from the flow — the same word as in Settings, corrected in
- * the same place; the control comes from `CONTROLS`; the refusal comes from the
- * errors the step returns, translated at the key Python named. The card invents
- * none of it: it gives it shape.
- */
-function renderField(entry, { data, errors, stepId, flow, onSet, keep }) {
-  const name = entry.name;
-  const spec = CONTROLS()[name] ?? { kind: "text" };
-  const value = data[name];
-  const errorKey = errors?.[name];
-
-  const meta = {
-    label: spec.label || flow.t(`step.${stepId}.data.${name}`) || name,
-    // "optional" is said on boxes to fill in, never on a choice: a chip carries
-    // an answer already, and none of them can be left empty.
-    optional: entry.required === false && spec.kind !== "choice",
-    helper: spec.helper,
-    error: errorKey ? flow.t(`error.${errorKey}`) || errorKey : null,
-  };
-
-  let control;
-  if (spec.kind === "choice") {
-    control = choiceControl(value, {
-      options: spec.options,
-      onPick: (picked) => onSet(name, picked, Boolean(spec.rerender)),
-    });
-  } else if (spec.kind === "number") {
-    control = numberControl(value, {
-      unit: spec.unit,
-      step: spec.step,
-      onInput: (v) => onSet(name, v),
-    });
-  } else if (spec.kind === "entity") {
-    control = entityControl(value, {
-      hass: flow.hass,
-      selector: entry.selector,
-      onPick: (v) => onSet(name, v),
-      keep,
-    });
-  } else {
-    control = textControl(value, {
-      placeholder: spec.placeholder,
-      onInput: (v) => onSet(name, v),
-    });
-  }
-
-  const el = frame(meta, control);
-  el.dataset.field = name;
-  return el;
-}
-
-/**
- * An input screen of the card, backed by a step of the flow.
- *
- * It follows the flow rather than driving it: what the current step asks for
- * decides what is drawn. Choosing an odometer source that reads backwards
- * returns the "resync" step, and the screen becomes the "resync" screen without
- * anybody having had to orchestrate it.
- */
-class FormScreen {
-  live = false;
-
-  #card;
-  #flow;
-  #path;
-  #done;
-  #ident;
-  #title;
-  #data = {};
-  #error = null;
-  #busy = false;
-  #stepId = null;
-  #selectors = [];
-  /** The field just touched, to give it the keyboard back afterwards. */
-  #focus = null;
-  /** The last `hass` push handed to the controls — see `onHass`. */
-  #pushed = 0;
-
-  constructor(card, { flow, path = [], done = null, ident = null, onDone = null, title = null }) {
-    this.#card = card;
-    this.#flow = flow;
-    this.#path = path;
-    this.#done = done;
-    this.#ident = ident;
-    this.#title = title;
-    this.onDone = onDone;
-    this.key = `form:${path.map((p) => JSON.stringify(p)).join(">")}`;
-  }
-
-  onHass(hass) {
-    this.#flow.hass = hass;
-    // At most once a second: `hass` is reassigned at every state change in the
-    // whole house, and each assignment makes the open `ha-form`/`ha-selector`
-    // re-render. An entity picker one second old is still right; a sheet that
-    // re-renders continuously is not.
-    const now = Date.now();
-    if (now - this.#pushed < 1000) return;
-    this.#pushed = now;
-    for (const selector of this.#selectors) selector.hass = hass;
-  }
-
-  /** Opens the flow, walks down to the step aimed at, and paints itself. */
-  async open() {
-    try {
-      // A flow already open is picked up where it stands: that is how an
-      // unexpected step — "resync", when two readings contradict each other —
-      // becomes a screen without having to replay the path from the root.
-      if (!this.#flow.step) await this.#flow.open(this.#path);
-    } catch (err) {
-      this.#card.dropScreen(this, flowError(err));
-      return;
-    }
-    if (this.#flow.ended) {
-      this.#card.dropScreen(this, this.#flow.outcome);
-      return;
-    }
-    this.#adopt();
-    this.#card.repaintSheet(true);
-  }
-
-  /** Starts again from the current step's values, when it is a new one. */
-  #adopt() {
-    const step = this.#flow.step;
-    if (step?.step_id === this.#stepId) return;
-    this.#stepId = step?.step_id ?? null;
-    this.#data = initialFlowData(step?.data_schema);
-  }
-
-  get #layout() {
-    return LAYOUTS()[this.#stepId] ?? null;
-  }
-
-  /** The context the bespoke bodies receive. */
-  #ctx() {
-    return {
-      step: this.#flow.step,
-      flow: this.#flow,
-      data: this.#data,
-      set: (name, value, repaint = false) => this.#set(name, value, repaint),
-      keep: (el) => this.#selectors.push(el),
-      submit: (payload) => this.#submit(payload),
-    };
-  }
-
-  #set(name, value, repaint) {
-    this.#data = { ...this.#data, [name]: value };
-    if (!repaint) return;
-    this.#focus = name;
-    this.#card.repaintSheet(true);
-  }
-
-  paint(sheet) {
-    const step = this.#flow.step;
-    const layout = this.#layout;
-    this.#selectors = [];
-
-    // A set's form takes its shade: the choice chips, the half designated on
-    // the plan and the gesture's button fall in with it, and one stays in the
-    // same set of tyres from one screen to the next.
-    if (this.#ident?.set) {
-      const tone = look(this.#ident.set);
-      sheet.style.setProperty("--tint", tone.tint);
-    }
-
-    sheet.appendChild(
-      sheetHead({
-        title:
-          layout?.title ||
-          this.#title ||
-          this.#flow.t(`step.${this.#stepId}.title`) ||
-          t("act.settings"),
-        set: this.#ident?.set ?? null,
-        attrs: this.#ident?.attrs ?? {},
-        onBack: this.#card.stackDepth > 1 ? () => this.#card.dropScreen(this) : null,
-      })
-    );
-
-    if (!step) {
-      const wait = document.createElement("p");
-      wait.className = "wait";
-      wait.textContent = t("card.opening");
-      sheet.appendChild(wait);
-      return;
-    }
-
-    // The title becomes a subtitle when the header is taken by the set.
-    if (this.#ident?.set && (layout?.title || this.#title)) {
-      const h = document.createElement("h2");
-      h.textContent = layout?.title || this.#title;
-      h.style.marginBottom = "6px";
-      sheet.appendChild(h);
-    }
-
-    if (layout?.lede) {
-      const lede = document.createElement("div");
-      lede.className = "desc";
-      const p = document.createElement("p");
-      p.textContent = layout.lede;
-      lede.appendChild(p);
-      sheet.appendChild(lede);
-    }
-
-    if (this.#error) {
-      const err = document.createElement("div");
-      err.className = "err";
-      err.textContent = this.#error;
-      sheet.appendChild(err);
-    }
-
-    if (!layout) {
-      this.#paintFallback(sheet, step);
-      return;
-    }
-
-    const ctx = this.#ctx();
-    if (layout.body) sheet.appendChild(layout.body(ctx));
-
-    const drawn = new Set();
-    for (const group of layout.groups ?? []) {
-      const el = this.#paintGroup(group, step, drawn);
-      if (el) sheet.appendChild(el);
-    }
-
-    // What the flow asks for and the card cannot draw. Nothing today — and
-    // that is precisely why it has to be written: the day Python gains a
-    // field, it shows up here without anyone touching this.
-    const eaten = (name) =>
-      drawn.has(name) ||
-      layout.consumes === "all" ||
-      (Array.isArray(layout.consumes) && layout.consumes.includes(name));
-    const rest = (step.data_schema ?? []).filter((entry) => !eaten(entry.name));
-    if (rest.length) sheet.appendChild(this.#haForm(step, rest));
-
-    const cancel = actButton(t("act.cancel"), null, "", () => this.#card.dropScreen(this));
-    const foot = layout.foot
-      ? sheetFoot([cancel, ...layout.foot(ctx)])
-      : sheetFoot([
-          cancel,
-          this.#verb(layout.verb || t("act.confirm")),
-        ]);
-    sheet.appendChild(foot);
-
-    this.#restoreFocus(sheet);
-  }
-
-  #verb(label) {
-    const button = actButton(label, null, "primary", () => this.#submit(this.#payload()));
-    if (this.#busy) button.disabled = true;
-    return button;
-  }
-
-  #paintGroup(group, step, drawn) {
-    const entries = [];
-    for (const item of group.fields ?? []) {
-      const name = typeof item === "string" ? item : item.name;
-      const entry = (step.data_schema ?? []).find((field) => field.name === name);
-      // A field the flow does not offer at that step is not drawn:
-      // "replace" only exists for a fitted original, and inventing it
-      // would offer to replace what is not on the car.
-      if (!entry) continue;
-      drawn.add(name);
-      if (typeof item !== "string" && item.when && !item.when(this.#data)) continue;
-      entries.push(entry);
-    }
-    if (!entries.length) return null;
-
-    const build = () => {
-      const set = document.createElement("div");
-      set.className = "fset";
-      for (const entry of entries) set.appendChild(this.#paintField(entry, step));
-      return set;
-    };
-
-    if (group.fold) {
-      const details = document.createElement("details");
-      details.className = "fold";
-      const summary = document.createElement("summary");
-      summary.appendChild(makeIcon("mdi:chevron-right"));
-      summary.appendChild(document.createTextNode(group.fold));
-      details.appendChild(summary);
-      details.appendChild(build());
-      // A filled field is not hidden: the fold is opened if it already holds
-      // something, otherwise one would edit half a record without seeing it.
-      // Zero does not count — "distance already run" is zero on every new
-      // record, and the fold would always open to show nothing.
-      if (entries.some((entry) => filled(this.#data[entry.name]) && this.#data[entry.name] !== 0)) {
-        details.open = true;
-      }
-      return details;
-    }
-
-    const el = document.createElement("div");
-    el.className = "grp" + (group.warn ? " warn" : "");
-    if (group.title) {
-      const gt = document.createElement("div");
-      gt.className = "gt";
-      gt.textContent = group.title;
-      el.appendChild(gt);
-    }
-    if (group.note) {
-      const gd = document.createElement("div");
-      gd.className = "gd";
-      gd.textContent = group.note(step);
-      el.appendChild(gd);
-    }
-    el.appendChild(build());
-    return el;
-  }
-
-  #paintField(entry, step) {
-    return renderField(entry, {
-      data: this.#data,
-      errors: step.errors,
-      stepId: step.step_id,
-      flow: this.#flow,
-      onSet: (name, value, repaint) => this.#set(name, value, repaint),
-      keep: (el) => this.#selectors.push(el),
-    });
-  }
-
-  /** The net: the schema as it comes, rendered by Home Assistant. */
-  #haForm(step, schema) {
-    const form = document.createElement("ha-form");
-    form.hass = this.#flow.hass;
-    form.schema = schema;
-    form.data = this.#data;
-    form.error = step.errors ?? undefined;
-    form.computeLabel = (f) => this.#flow.t(`step.${step.step_id}.data.${f.name}`) || f.name;
-    form.computeHelper = (f) =>
-      this.#flow.t(`step.${step.step_id}.data_description.${f.name}`) || "";
-    form.computeError = (error) => this.#flow.t(`error.${error}`) || error;
-    form.localizeValue = (key) => this.#flow.option(key);
-    form.addEventListener("value-changed", (event) => {
-      event.stopPropagation();
-      this.#data = { ...this.#data, ...event.detail.value };
-    });
-    this.#selectors.push(form);
-    return form;
-  }
-
-  #paintFallback(sheet, step) {
-    const description = this.#flow.t(
-      `step.${step.step_id}.description`,
-      step.description_placeholders
-    );
-    if (description) {
-      const box = document.createElement("div");
-      box.className = "desc";
-      renderMarkdown(description, box);
-      sheet.appendChild(box);
-    }
-
-    if (step.type === "menu") {
-      const list = Array.isArray(step.menu_options)
-        ? step.menu_options
-        : Object.keys(step.menu_options ?? {});
-      const menu = document.createElement("div");
-      menu.className = "menu";
-      for (const option of list) {
-        const label =
-          this.#flow.t(`step.${step.step_id}.menu_options.${option}`) ||
-          (Array.isArray(step.menu_options) ? option : step.menu_options[option]);
-        menu.appendChild(
-          actButton(label, null, "", () => this.#submit({ next_step_id: option }))
-        );
-      }
-      sheet.appendChild(menu);
-      sheet.appendChild(
-        sheetFoot([actButton(t("act.cancel"), null, "", () => this.#card.dropScreen(this))])
-      );
-      return;
-    }
-
-    sheet.appendChild(this.#haForm(step, step.data_schema ?? []));
-    sheet.appendChild(
-      sheetFoot([
-        actButton(t("act.cancel"), null, "", () => this.#card.dropScreen(this)),
-        this.#verb(t("act.confirm")),
-      ])
-    );
-  }
-
-  /**
-   * What leaves for the flow.
-   *
-   * An empty field is not sent empty: `vol.Optional` without a value leaves the
-   * flow to decide, and it is the flow that knows whether absence clears or
-   * keeps. A required field always leaves, even empty — that is how "Give the
-   * vehicle a name" comes back rather than nothing.
-   */
-  #payload() {
-    const schema = this.#flow.step?.data_schema ?? [];
-    const out = {};
-    for (const entry of schema) {
-      const value = this.#data[entry.name];
-      if (entry.required || filled(value)) out[entry.name] = value ?? "";
-    }
-    return out;
-  }
-
-  async #submit(payload) {
-    if (this.#busy) return;
-    this.#busy = true;
-    this.#error = null;
-    this.#card.repaintSheet(true);
-    try {
-      await this.#flow.send(payload);
-    } catch (err) {
-      this.#error = flowError(err);
-      this.#busy = false;
-      this.#card.repaintSheet(true);
-      return;
-    }
-    this.#busy = false;
-
-    if (this.#flow.ended) {
-      this.#card.dropScreen(this, this.#flow.outcome ?? this.#done);
-      this.onDone?.();
-      return;
-    }
-    // A step that comes back with errors keeps what was typed: the
-    // correction is not made on an empty form.
-    this.#adopt();
-    this.#card.repaintSheet(true);
-  }
-
-  /** Gives up the flow if the screen closes before its end. */
-  leave() {
-    this.#flow.cancel();
-  }
-
-  /**
-   * Gives the keyboard back to the field just touched.
-   *
-   * A clicked chip repaints the sheet when it changes what is displayed —
-   * "replace the fitted set" makes the reading appear. Without this, focus
-   * would fall back on the sheet, and the Tab key would start again from the
-   * top.
-   */
-  #restoreFocus(sheet) {
-    if (!this.#focus) return;
-    // The name comes from the server's schema: escaped, so that a quote does
-    // not break the selector.
-    const field = sheet.querySelector(`[data-field="${CSS.escape(this.#focus)}"]`);
-    this.#focus = null;
-    field?.querySelector('[aria-checked="true"], [aria-pressed="true"], input')?.focus();
-  }
-}
-
-/** True when a field carries something. Zero counts. */
-const filled = (value) =>
-  value !== undefined && value !== null && value !== "" && !(Array.isArray(value) && !value.length);
-
-/**
- * The vehicle's settings, on a single screen.
- *
- * The flow splits them into two steps — the name and the rotation reminder on
- * one side, the odometer source on the other — because a flow advances step by
- * step and a step is a save. That division makes no sense here: they are three
- * answers about the same car, and the menu that separated them required
- * choosing which one before even knowing what one wanted to change.
- *
- * The screen therefore reads both schemas, shows them together, and writes only
- * what moved. The odometer leaves first: it is the only one of the two that can
- * ask a further question — two readings contradicting each other — and the
- * name, for its part, reloads the entry as it saves.
- */
-class SettingsScreen {
-  live = false;
-  key = "settings";
-
-  #card;
-  #hass;
-  #entryId;
-  #schema = [];
-  #data = {};
-  #was = {};
-  #ready = false;
-  #busy = false;
-  #error = null;
-  #selectors = [];
-  /** The last `hass` push handed to the controls — same rule as above. */
-  #pushed = 0;
-
-  constructor(card, { hass, entryId }) {
-    this.#card = card;
-    this.#hass = hass;
-    this.#entryId = entryId;
-  }
-
-  onHass(hass) {
-    this.#hass = hass;
-    const now = Date.now();
-    if (now - this.#pushed < 1000) return;
-    this.#pushed = now;
-    for (const selector of this.#selectors) selector.hass = hass;
-  }
-
-  /**
-   * Fetches the two schemas, one after the other.
-   *
-   * One after the other, and not together: two flows open at once on the same
-   * entry have no reason to behave, and nothing here is in a hurry. Each is
-   * closed as soon as it is read — they were only kept open to write, and the
-   * writing will come later, with flows of its own.
-   */
-  async open() {
-    try {
-      for (const step of ["odometer", "vehicle"]) {
-        const flow = new Flow(this.#hass, this.#entryId);
-        await flow.open([{ next_step_id: step }]);
-        for (const entry of flow.step?.data_schema ?? []) {
-          this.#schema.push({ ...entry, step });
-        }
-        Object.assign(this.#data, initialFlowData(flow.step?.data_schema));
-        flow.cancel();
-      }
-    } catch (err) {
-      this.#card.dropScreen(this, flowError(err));
-      return;
-    }
-    this.#was = { ...this.#data };
-    this.#ready = true;
-    this.#card.repaintSheet(true);
-  }
-
-  #t(key, placeholders) {
-    return this.#hass?.localize?.(`component.${DOMAIN}.options.${key}`, placeholders);
-  }
-
-  /** A stand-in `Flow`, so that `renderField` reads the same translations. */
-  #voice() {
-    return { t: (key, ph) => this.#t(key, ph), hass: this.#hass };
-  }
-
-  paint(sheet) {
-    this.#selectors = [];
-    sheet.appendChild(
-      sheetHead({
-        title: t("sheet.settings"),
-        onBack: this.#card.stackDepth > 1 ? () => this.#card.dropScreen(this) : null,
-      })
-    );
-
-    if (!this.#ready) {
-      const wait = document.createElement("p");
-      wait.className = "wait";
-      wait.textContent = t("card.opening");
-      sheet.appendChild(wait);
-      return;
-    }
-
-    if (this.#error) {
-      const err = document.createElement("div");
-      err.className = "err";
-      err.textContent = this.#error;
-      sheet.appendChild(err);
-    }
-
-    // Three blocks, one per thing one may want to change: what names, what
-    // counts, what reminds. The same division as a set's record.
-    const groups = [
-      { title: t("group.vehicle"), fields: ["vehicle"] },
-      { title: t("group.odometer"), fields: ["odometer_entity"] },
-      { title: t("group.rotation"), fields: ["rotation_interval"] },
-    ];
-    for (const group of groups) {
-      const entries = this.#schema.filter((entry) => group.fields.includes(entry.name));
-      if (!entries.length) continue;
-
-      const el = document.createElement("div");
-      el.className = "grp";
-      const gt = document.createElement("div");
-      gt.className = "gt";
-      gt.textContent = group.title;
-      el.appendChild(gt);
-
-      const set = document.createElement("div");
-      set.className = "fset";
-      for (const entry of entries) {
-        set.appendChild(
-          renderField(entry, {
-            data: this.#data,
-            stepId: entry.step,
-            flow: this.#voice(),
-            onSet: (name, value) => {
-              this.#data = { ...this.#data, [name]: value };
-            },
-            keep: (selector) => this.#selectors.push(selector),
-          })
-        );
-      }
-      el.appendChild(set);
-      sheet.appendChild(el);
-    }
-
-    const more = document.createElement("div");
-    more.className = "tmore";
-    more.appendChild(
-      linkButton(t("act.add_vehicle"), "", () => {
-        this.#card.closeSheets();
-        this.#card.goToIntegration();
-      })
-    );
-    sheet.appendChild(more);
-
-    const save = actButton(t("act.save"), null, "primary", () => this.#save());
-    if (this.#busy) save.disabled = true;
-    sheet.appendChild(
-      sheetFoot([actButton(t("act.cancel"), null, "", () => this.#card.dropScreen(this)), save])
-    );
-  }
-
-  #changed(name) {
-    return (this.#data[name] ?? null) !== (this.#was[name] ?? null);
-  }
-
-  /** Writes only what moved: a step without a change reloads the entry for nothing. */
-  async #save() {
-    if (this.#busy) return;
-    // Nothing touched: we close without announcing a save that never
-    // happened. "Saved" on a sheet opened then closed as it was suggests
-    // something was changed without meaning to.
-    const touched = ["odometer_entity", "vehicle", "rotation_interval"].some((name) =>
-      this.#changed(name)
-    );
-    if (!touched) {
-      this.#card.dropScreen(this);
-      return;
-    }
-    this.#busy = true;
-    this.#error = null;
-    this.#card.repaintSheet(true);
-
-    const send = async (step) => {
-      const flow = new Flow(this.#hass, this.#entryId);
-      await flow.open([{ next_step_id: step }]);
-      const payload = {};
-      for (const entry of flow.step?.data_schema ?? []) {
-        const value = this.#data[entry.name];
-        if (entry.required || filled(value)) payload[entry.name] = value ?? "";
-      }
-      await flow.send(payload);
-      return flow;
-    };
-
-    try {
-      if (this.#changed("odometer_entity")) {
-        const flow = await send("odometer");
-        // The odometer may answer with a question: the new sensor reads less
-        // than what has been counted. It is asked in its own sheet, and the
-        // name saves once it has been answered.
-        if (!flow.ended) {
-          this.#busy = false;
-          this.#card.dropScreen(this);
-          this.#card.pushResync(flow, () =>
-            this.#saveVehicle().catch((err) => notify(this.#card, flowError(err)))
-          );
-          return;
-        }
-      }
-      await this.#saveVehicle();
-    } catch (err) {
-      this.#error = flowError(err);
-      this.#busy = false;
-      this.#card.repaintSheet(true);
-      return;
-    }
-    this.#busy = false;
-    this.#card.dropScreen(this, t("msg.saved_settings"));
-  }
-
-  async #saveVehicle() {
-    if (!this.#changed("vehicle") && !this.#changed("rotation_interval")) return;
-    const flow = new Flow(this.#hass, this.#entryId);
-    await flow.open([{ next_step_id: "vehicle" }]);
-    await flow.send({
-      vehicle: this.#data.vehicle ?? "",
-      rotation_interval: this.#data.rotation_interval ?? 0,
-    });
-    // An empty name comes back as an error rather than an abort: the sheet
-    // is already gone, so the refusal is said in the toast.
-    if (!flow.ended) {
-      const message = flow.step?.errors?.vehicle;
-      flow.cancel();
-      throw new Error(
-        (message && this.#t(`error.${message}`)) || t("msg.vehicle_failed")
-      );
-    }
-  }
-
-  leave() {}
-}
 
 class TyresCard extends HTMLElement {
   #config = null;
@@ -4046,8 +2333,9 @@ class TyresCard extends HTMLElement {
 
   /**
    * The gesture waiting to be confirmed on the open record: null | "mount" |
-   * "unmount" | "rotate" | "retire" | "adjust" | "delete". `#arg` carries what
-   * the gesture needs to remember — the axle aimed at, for a fitting.
+   * "unmount" | "rotate" | "retire" | "adjust". `#arg` carries what the
+   * gesture needs to remember — the axle aimed at, for a fitting. Deleting is
+   * not among them any more: it rewrites the record, which is the editor's.
    */
   #mode = null;
   #arg = null;
@@ -4358,67 +2646,39 @@ class TyresCard extends HTMLElement {
   }
 
   /**
-   * Opens an input screen, backed by a step of the options flow.
+   * Opens the editor, on this vehicle and — when one is named — on this set.
    *
-   * `step` is the step aimed at, `setId` the set it speaks of — the card walks
-   * down to it without showing the steps crossed, since they only ask questions
-   * already answered by touching a row.
+   * The card used to draw those forms itself, driving the integration's options
+   * flow over REST without ever showing its screens. The flow is gone: what it
+   * described is now written once, in `websocket_api.py`, and given shape once,
+   * in the editor panel — a page that shows the whole car at a time, where a
+   * flow could only ever show one step.
+   *
+   * What is left here is what a card is for: reading the state, and the
+   * manoeuvres, which are services and go straight to the component. Editing a
+   * record is a different act — one sits down for it — and it now happens in
+   * the one place that owns it, rather than in two that must agree.
    */
-  #openStep(step, { setId = null, done = null, after = null } = {}) {
+  #openEditor(setId = null) {
     const entryId = this.#entryId();
     if (!entryId) {
       notify(
         this,
         t("card.no_entry")
       );
-      return null;
+      return;
     }
-
-    const path = setId
-      ? [{ next_step_id: "manage" }, { id: setId }, { next_step_id: step }]
-      : [{ next_step_id: step }];
-    const set = setId ? this.#set(setId) : null;
-
-    const screen = new FormScreen(this, {
-      flow: new Flow(this.#hass, entryId),
-      path,
-      done,
-      title: LAYOUTS()[step]?.title,
-      ident: set ? { set, attrs: this.#attrs() } : null,
-      onDone: after,
-    });
-    this.pushScreen(screen);
-    screen.open();
-    return screen;
-  }
-
-  /**
-   * Deletes a set.
-   *
-   * The card has confirmed already, and said what the deletion erases: the
-   * flow's confirmation step is answered on the spot, otherwise the same
-   * question would be asked twice.
-   */
-  #deleteSet(set) {
-    const entryId = this.#entryId();
-    if (!entryId) return;
-    const flow = new Flow(this.#hass, entryId);
+    // The set is named in the address, so the page opens on it rather than on
+    // a list one would have to find it in again.
+    const query = new URLSearchParams({ vehicle: entryId });
+    if (setId) query.set("set", setId);
     this.closeSheets();
-    (async () => {
-      try {
-        await flow.open([
-          { next_step_id: "manage" },
-          { id: set.id },
-          { next_step_id: "delete" },
-          {},
-        ]);
-        notify(this, flow.outcome ?? t("msg.deleted", { name: nameOf(set) }));
-      } catch (err) {
-        notify(this, flowError(err));
-      } finally {
-        flow.cancel();
-      }
-    })();
+    performAction(
+      this,
+      this.#hass,
+      { action: "navigate", navigation_path: `/${PANEL_PATH}?${query}` },
+      this.#config.entity
+    );
   }
 
   /* ----- rendering ----- */
@@ -4502,9 +2762,7 @@ class TyresCard extends HTMLElement {
       const first = document.createElement("div");
       first.className = "links";
       first.appendChild(
-        actButton(t("act.add_set"), "mdi:plus", "primary", () =>
-          this.#openStep("add", { done: t("msg.set_added") })
-        )
+        actButton(t("act.add_set"), "mdi:plus", "primary", () => this.#openEditor())
       );
       this.#body.appendChild(first);
       return;
@@ -4678,10 +2936,9 @@ class TyresCard extends HTMLElement {
       menu.appendChild(hr);
     };
 
-    item(t("act.add_set"), "mdi:plus", () =>
-      this.#openStep("add", { done: t("msg.set_added") })
-    );
-    item(t("sheet.settings"), "mdi:car-cog", () => this.#settings());
+    // One way in, straight to the page: adding a set, the vehicle's settings
+    // and the integration's own page were three labels over the same door.
+    item(t("act.editor"), "mdi:open-in-new", () => this.#openEditor());
     rule();
     // An odometer fed by a sensor is not corrected by hand: the row says so,
     // and opens onto nothing.
@@ -4690,8 +2947,6 @@ class TyresCard extends HTMLElement {
     } else {
       item(t("act.update_odometer"), "mdi:counter", () => this.#askOdometer(attrs));
     }
-    rule();
-    item(t("act.integration_page"), "mdi:open-in-new", () => this.goToIntegration());
 
     layer.appendChild(menu);
     root.appendChild(layer);
@@ -4845,55 +3100,6 @@ class TyresCard extends HTMLElement {
   /** The service, from the odometer sheet. */
   setOdometer(value) {
     return this.#call("set_odometer", { odometer: value });
-  }
-
-  /** The vehicle's settings: its name, its odometer, its reminder. */
-  #settings() {
-    const entryId = this.#entryId();
-    if (!entryId) {
-      notify(
-        this,
-        t("card.no_entry")
-      );
-      return;
-    }
-    const screen = new SettingsScreen(this, { hass: this.#hass, entryId });
-    this.pushScreen(screen);
-    screen.open();
-  }
-
-  /**
-   * The "two readings contradict each other" sheet, on a flow already open.
-   *
-   * The question does not come from a gesture: it is born of a sensor reading
-   * less than what has been counted, and the flow asks it just when one thought
-   * one had finished. It therefore has a sheet of its own, and what was left to
-   * save waits until it has been answered.
-   */
-  pushResync(flow, after) {
-    const screen = new FormScreen(this, {
-      flow,
-      done: t("msg.saved_settings"),
-      onDone: after,
-    });
-    this.pushScreen(screen);
-    screen.open();
-  }
-
-  /**
-   * The integration's page.
-   *
-   * Adding a second vehicle happens there, and not here: a card is bound to one
-   * car, it cannot create another without lying about what it shows. But it
-   * says where that is done, which was what was missing to find it.
-   */
-  goToIntegration() {
-    performAction(
-      this,
-      this.#hass,
-      { action: "navigate", navigation_path: `/config/integrations/integration/${DOMAIN}` },
-      this.#config.entity
-    );
   }
 
   /**
@@ -5423,7 +3629,7 @@ class TyresCard extends HTMLElement {
    */
   #confirm(set, attrs) {
     const el = document.createElement("div");
-    el.className = "confirm" + (["retire", "delete"].includes(this.#mode) ? " danger" : "");
+    el.className = "confirm" + (this.#mode === "retire" ? " danger" : "");
 
     const say = document.createElement("div");
     say.className = "say";
@@ -5485,22 +3691,6 @@ class TyresCard extends HTMLElement {
             t("msg.adjusted")
           );
         }),
-        cancel
-      );
-      el.appendChild(acts);
-      return el;
-    }
-
-    if (this.#mode === "delete") {
-      say.append(
-        document.createTextNode(t("delete.head") + " "),
-        bold(km(set.km)),
-        document.createTextNode(" " + t("delete.tail"))
-      );
-      acts.append(
-        this.#button(t("act.delete"), "mdi:trash-can-outline", "danger", () =>
-          this.#deleteSet(set)
-        ),
         cancel
       );
       el.appendChild(acts);
@@ -5659,7 +3849,7 @@ class TyresCard extends HTMLElement {
     ].filter(Boolean);
     out.push(
       this.#block(t("block.record"), fiche.join(" · ") || t("block.record_empty"), t("act.edit"), () =>
-        this.#openStep("edit", { setId: set.id, done: t("msg.record_saved") })
+        this.#openEditor(set.id)
       )
     );
 
@@ -5678,7 +3868,7 @@ class TyresCard extends HTMLElement {
               (reads.length ? ` — ${reads.join(" · ")} ${wheels[0].unit ?? "bar"}` : "")
           : t("block.sensors_none"),
         wheels.length ? t("act.edit") : t("act.attach"),
-        () => this.#openStep("tpms", { setId: set.id, done: t("msg.sensors_saved") }),
+        () => this.#openEditor(set.id),
         !wheels.length
       )
     );
@@ -5720,32 +3910,19 @@ class TyresCard extends HTMLElement {
   /**
    * The rare and the consequential, at the end of the sheet.
    *
-   * Duplicate, separate, file away, delete: four gestures made once in a set's
-   * life. As links and not as buttons — they can still be read, but one does
-   * not lean on them by accident.
+   * Filing a set away stays here: it takes no decision beyond the odometer, and
+   * it is what one does on the day one takes a worn set off — with the car in
+   * front of one, not a settings page.
+   *
+   * Duplicating, separating and deleting left. All three start from the same
+   * record and end by rewriting it, which is the editor's work; and three links
+   * pointing at the same page, each promising something else, would say the
+   * gesture happens here when it does not. One link says where they live.
    */
   #more(set, attrs) {
     const el = document.createElement("div");
     el.className = "tmore";
-
-    // Duplicating starts from an existing record: that is what buying the same
-    // reference again looks like, or adding a second identical pair.
-    el.appendChild(
-      this.#link(t("sheet.duplicate"), "", () =>
-        this.#openStep("duplicate", { setId: set.id, done: t("msg.duplicated") })
-      )
-    );
-
-    if (axleOf(set, attrs) === "all" && !set.retired) {
-      el.appendChild(
-        this.#link(t("sheet.separate"), "", () =>
-          this.#openStep("separate", {
-            setId: set.id,
-            done: t("msg.separated", { name: nameOf(set) }),
-          })
-        )
-      );
-    }
+    void attrs;
 
     if (!set.retired) {
       el.appendChild(
@@ -5753,7 +3930,7 @@ class TyresCard extends HTMLElement {
       );
     }
 
-    el.appendChild(this.#link(t("act.delete_set"), "danger", () => this.#ask("delete")));
+    el.appendChild(this.#link(t("act.editor"), "", () => this.#openEditor(set.id)));
     return el;
   }
 

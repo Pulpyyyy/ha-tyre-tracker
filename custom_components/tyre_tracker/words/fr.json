@@ -35,18 +35,6 @@
     "fallback": "Train"
   },
   "status": {
-    "mounted": "monté",
-    "mounted_at": "monté à l'{position}",
-    "removed": "déposé",
-    "retired": "à l'historique",
-    "history": "historique",
     "bare": "Aucun train"
-  },
-  "entry_title": {
-    "template": "Suivi {article}{vehicle}",
-    "empty": "Suivi",
-    "article": "de ",
-    "article_elided": "d’",
-    "elides_before": "aeiouâàäéèêëîïôöùûü"
   }
 }

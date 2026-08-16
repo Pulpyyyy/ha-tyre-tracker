@@ -70,24 +70,6 @@ class Words:
             value = _walk(self._fallback, path)
         return value if isinstance(value, str) else default
 
-    def entry_title(self, vehicle: str) -> str:
-        """What the config entry is called, given the vehicle's name.
-
-        The elision is a property of the language and lives in its file: French
-        writes « d'Alfa GT » but « de Honda », and English elides nothing at
-        all. The code only applies the rule it is handed.
-        """
-        name = (vehicle or "").strip()
-        if not name:
-            return self("entry_title.empty")
-        eliding = self.get("entry_title.elides_before")
-        article = self.get(
-            "entry_title.article_elided" if name[0].casefold() in eliding else
-            "entry_title.article"
-        )
-        return self("entry_title.template", article=article, vehicle=name).strip()
-
-
 def _walk(table: dict[str, Any], path: str) -> Any:
     """Follow a dotted path into nested dicts. None when it leads nowhere."""
     node: Any = table

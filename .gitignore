@@ -9,3 +9,4 @@ __pycache__/
 /docs/preview-*.png
 # The local visual test bench that generates the documentation screenshots.
 /docs/screenshot-harness.html
+/docs/vantage.svg

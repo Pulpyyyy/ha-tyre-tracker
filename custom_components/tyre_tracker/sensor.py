@@ -60,16 +60,15 @@ def _fits(value: str | None) -> str | None:
 async def async_setup_entry(
     hass: HomeAssistant, entry: TyreConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up one sensor per set, plus the fitted-set sensor."""
-    coordinator = entry.runtime_data
-
-    # One sensor per set, each on the set's own device. Deleting a set is the
-    # entry's business now: see `_async_prune_devices` in __init__.py, which
-    # clears away what a removed set leaves behind.
-    async_add_entities(
-        [TyreSetSensor(coordinator, tyre) for tyre in coordinator.sets]
-    )
-    async_add_entities([TyreMountedSensor(coordinator)])
+    """Set up one sensor per set, plus the fitted-set sensor — per vehicle."""
+    for coordinator in entry.runtime_data.values():
+        # One sensor per set, each on the set's own device. Deleting a set is
+        # the entry's business now: see `_async_prune_devices` in __init__.py,
+        # which clears away what a removed set leaves behind.
+        async_add_entities(
+            [TyreSetSensor(coordinator, tyre) for tyre in coordinator.sets]
+        )
+        async_add_entities([TyreMountedSensor(coordinator)])
 
     # Entity services rather than domain services: with several vehicles the
     # caller must say which one, and Home Assistant does that routing for us.
@@ -285,11 +284,11 @@ class TyreMountedSensor(TyreEntity, SensorEntity):
             )
 
         return {
-            # The card manages the sets itself: adding, editing and deleting a
-            # set all go through the vehicle's options flow, which is addressed
-            # by `entry_id` alone. `id` below is the set's id, which the flow
-            # asks for at its « which set » step — those two fields are all the
-            # card needs, no entity-registry lookup, no second round trip.
+            # Where a record is edited: the card carries no form of its own any
+            # more, it opens the panel at /tyre-tracker on this very vehicle —
+            # and, when a set was touched, on that set. `id` below is the set's.
+            # Those two fields are all the card needs to build the address: no
+            # entity-registry lookup, no second round trip.
             "entry_id": self.coordinator.entry_id,
             # The car's own name. The card heads itself with it, and cannot
             # get it from the entity: the friendly name is « <car> Tyres »,

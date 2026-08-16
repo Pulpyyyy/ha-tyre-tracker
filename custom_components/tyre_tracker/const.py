@@ -8,7 +8,10 @@ DOMAIN: Final = "tyre_tracker"
 
 # The schema the released integration ships with. Held here rather than only on
 # the flow class so `async_migrate_entry` can answer without importing it.
-CONFIG_VERSION: Final = 3
+# 4 is the single-entry schema: ONE entry for the integration, every vehicle a
+# record in its options. Lower numbers were one entry per vehicle and belong to
+# the betas; such an entry no longer loads.
+CONFIG_VERSION: Final = 4
 
 # The manifest is the single place the version is written. The card resource
 # carries it as `?v=`, so an upgrade invalidates the browser cache on its own.
@@ -24,11 +27,51 @@ CARD_FILENAME: Final = "tyres-card.js"
 
 # JS modules published to the Lovelace resources. The file holds both the card
 # and the floorplan badge — one module, two custom elements.
+#
+# The admin panel is NOT in this list, and must never be: a Lovelace resource is
+# loaded into every dashboard of the house, and the panel is a page of its own.
+# It travels the same way — served from the integration's folder, with the same
+# `?v=` — but through `frontend.async_register_built_in_panel`.
 JSMODULES: Final[list[dict[str, str]]] = [
     {"name": "Tyres Card", "filename": CARD_FILENAME},
 ]
 
-# Vehicle (main entry)
+# ── Admin panel ───────────────────────────────────────────────────────────────
+# Everything the integration is configured with is edited here: the config flow
+# creates a vehicle and stops there, and the options flow — seventeen steps of
+# menus and forms — was removed once this covered all of them.
+#
+# Reachable three ways: the sidebar (see below), the vehicle device's
+# `configuration_url`, and http://ha:8123/tyre-tracker directly.
+ADMIN_JS: Final = "tyre-tracker-admin.js"
+PANEL_URL_PATH: Final = "tyre-tracker"
+PANEL_NAME: Final = "tyre-tracker-panel"  # the custom element ADMIN_JS defines
+# Declaring a sidebar title is what lets each user show or hide the entry from
+# Home Assistant's own sidebar editor (long-press the sidebar header). A panel
+# without a title is not merely hidden: nobody can bring it back. Not
+# translated — `async_register_built_in_panel` takes a literal string.
+PANEL_SIDEBAR_TITLE: Final = "Tyre Tracker"
+PANEL_SIDEBAR_ICON: Final = "mdi:tire"
+
+# WebSocket API — the panel's only way in and out. Four commands write:
+# `config/save` for what is recorded, `action` for what is done to a set, and
+# `vehicle/create` / `vehicle/delete` for the car itself — the first is the
+# config flow's import step in panel clothing, the second removes the entry,
+# which is what the integration page's own delete button does.
+WS_CONFIG_GET: Final = f"{DOMAIN}/config/get"
+WS_CONFIG_SAVE: Final = f"{DOMAIN}/config/save"
+WS_ACTION: Final = f"{DOMAIN}/action"
+WS_VEHICLE_CREATE: Final = f"{DOMAIN}/vehicle/create"
+WS_VEHICLE_DELETE: Final = f"{DOMAIN}/vehicle/delete"
+
+# The vehicles, in the single entry's options. One record each, carrying its
+# own stable `id`: the key its store, its devices and its entity unique_ids
+# hang from — everything a config entry's entry_id used to provide when each
+# vehicle was an entry of its own.
+CONF_VEHICLES: Final = "vehicles"
+CONF_VEHICLE_ID: Final = "id"
+
+# Vehicle record fields
 CONF_VEHICLE: Final = "vehicle"
 CONF_ODOMETER_ENTITY: Final = "odometer_entity"
 # Where the counter stood when tracking started. Only read while the store is
@@ -156,15 +199,11 @@ SEASON_ICONS: Final = {
     SEASON_ALL: "mdi:sun-snowflake",
 }
 
-# The entry is titled after what it does, the device after what it is. Both
-# carrying « Alfa GT » made Home Assistant stack the same name twice, the
-# heading above the row it introduced. The device keeps the car's name — it is
-# what names the entities, « Alfa GT Odometer » — so the entry gives way.
-#
-# How that title reads is a question for each language, and it lives with the
-# other words: see `words.entry_title` in `translations/`, and `Words.entry_title`
-# in `i18n.py`. French elides before a vowel and English elides nothing, which
-# is a rule about French rather than a rule about tyres.
+# The entry is titled after the integration — « Tyre Tracker », plainly. It is
+# one entry for every vehicle, and a car's name belongs to its device, which is
+# what names the entities: « Alfa GT Odometer ». The per-vehicle titles of the
+# one-entry-per-car era (« Suivi d'Alfa GT », with the French elision worked
+# out in `words/`) went with the era.
 
 
 # The last word of each entity_id, in English whatever the interface speaks.

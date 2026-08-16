@@ -18,7 +18,7 @@ from __future__ import annotations
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity, async_generate_entity_id
 
-from .const import AXLE_PAIR, DOMAIN
+from .const import AXLE_PAIR, DOMAIN, PANEL_URL_PATH
 from .coordinator import TyreCoordinator, TyreSet
 from .i18n import Words
 
@@ -28,6 +28,11 @@ class TyreEntity(Entity):
 
     _attr_has_entity_name = True
     _attr_should_poll = False
+
+    # What this entity shows, for the coordinator to know whom to wake. None is
+    # the vehicle itself: it hears every change, a set's entity only its own.
+    # See `TyreCoordinator.add_listener`.
+    _listen_scope: str | None = None
 
     def __init__(
         self,
@@ -61,6 +66,15 @@ class TyreEntity(Entity):
             # can reach on its own — so the integration reads the word itself,
             # in the language Home Assistant is set to. See `i18n.py`.
             model=coordinator.words("device.vehicle"),
+            # « Visit device » on the vehicle's page opens the editor. It is
+            # the path Home Assistant offers for a device that is configured
+            # elsewhere, and the one place someone looking at the car's page
+            # would think to click — the sidebar entry can be hidden, and the
+            # button on the integration page is two clicks away.
+            # The `homeassistant://` scheme is what makes it an in-app path:
+            # the registry refuses a bare `/tyre-tracker`, and an `http://`
+            # form would hard-code one of the ways into the house.
+            configuration_url=f"homeassistant://{PANEL_URL_PATH}",
         )
 
     def _pin(self, entity_id_format: str, device_name: str, slug: str) -> None:
@@ -77,7 +91,11 @@ class TyreEntity(Entity):
     async def async_added_to_hass(self) -> None:
         """Subscribe while on the bus."""
         await super().async_added_to_hass()
-        self.async_on_remove(self.coordinator.add_listener(self.async_write_ha_state))
+        self.async_on_remove(
+            self.coordinator.add_listener(
+                self.async_write_ha_state, self._listen_scope
+            )
+        )
 
 
 class TyreSetEntity(TyreEntity):
@@ -94,6 +112,8 @@ class TyreSetEntity(TyreEntity):
     ) -> None:
         """Attach to the set's device, itself attached to the vehicle."""
         super().__init__(coordinator, key)
+        # A pressure moving on another set is none of this entity's business.
+        self._listen_scope = tyre.set_id
         # The set names its own entities, not the car: `sensor.pirelli_mileage`
         # and not `sensor.alfa_gt_mileage`, which four sets would all want.
         if entity_id_format and slug:

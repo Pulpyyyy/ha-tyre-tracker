@@ -28,23 +28,24 @@ from .entity import TyreEntity, TyreSetEntity
 async def async_setup_entry(
     hass: HomeAssistant, entry: TyreConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
-    """Set up the manual odometer, and one total box per set."""
-    coordinator = entry.runtime_data
-    if not coordinator.odometer_entity:
-        async_add_entities([TyreOdometerNumber(coordinator)])
-    else:
-        # The box a manual configuration created earlier. With a sensor now
-        # reading the counter it will never be offered again, and left in the
-        # registry it sits on the vehicle's page as « unavailable » for ever.
-        registry = er.async_get(hass)
-        stale = registry.async_get_entity_id(
-            "number", DOMAIN, f"{entry.entry_id}_odometer"
+    """Set up the manual odometer, and one total box per set — per vehicle."""
+    for coordinator in entry.runtime_data.values():
+        if not coordinator.odometer_entity:
+            async_add_entities([TyreOdometerNumber(coordinator)])
+        else:
+            # The box a manual configuration created earlier. With a sensor now
+            # reading the counter it will never be offered again, and left in
+            # the registry it sits on the vehicle's page as « unavailable » for
+            # ever. Unique ids hang from the vehicle's id, not the entry's.
+            registry = er.async_get(hass)
+            stale = registry.async_get_entity_id(
+                "number", DOMAIN, f"{coordinator.entry_id}_odometer"
+            )
+            if stale:
+                registry.async_remove(stale)
+        async_add_entities(
+            [TyreSetTotalNumber(coordinator, tyre) for tyre in coordinator.sets]
         )
-        if stale:
-            registry.async_remove(stale)
-    async_add_entities(
-        [TyreSetTotalNumber(coordinator, tyre) for tyre in coordinator.sets]
-    )
 
 
 class TyreOdometerNumber(TyreEntity, NumberEntity):

@@ -1,4 +1,4 @@
-"""Publication of the Lovelace card shipped with the integration.
+"""Publication of the two pieces of frontend shipped with the integration.
 
 The card lives inside the integration rather than in `www/`: HACS delivers
 `custom_components/tyre_tracker/` and nothing else, so anything the card needs
@@ -8,6 +8,17 @@ no file to copy, no resource to add by hand.
 Sequence taken from KipK's guide on embedding a Lovelace card in an
 integration (https://forum.hacf.fr/t/74074): the static path is always
 registered, and the Lovelace resource is only touched in storage mode.
+
+The admin panel travels the same way and is registered differently, at the
+bottom of this file: it is a *page*, not a card, so no Lovelace resource is
+involved — a resource is loaded into every dashboard of the house, and this one
+belongs to a single address. It declares a sidebar title, which is what puts it
+in the sidebar AND — the actual reason — what makes it appear in Home
+Assistant's own sidebar editor (long-press the sidebar header). A panel without
+a title is not merely hidden: nobody can bring it back. Declaring it is
+therefore what turns the sidebar entry into a per-USER choice, stored in each
+user's frontend settings, rather than an integration-wide one we would have to
+persist and re-apply.
 """
 
 from __future__ import annotations
@@ -15,15 +26,21 @@ from __future__ import annotations
 import logging
 from pathlib import Path
 
+from homeassistant.components import frontend
 from homeassistant.components.http import StaticPathConfig
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, callback
 from homeassistant.loader import async_get_integration
 
 from ..const import (
+    ADMIN_JS,
     CARD_FILENAME,
     DOMAIN,
     FALLBACK_VERSION,
     JSMODULES,
+    PANEL_NAME,
+    PANEL_SIDEBAR_ICON,
+    PANEL_SIDEBAR_TITLE,
+    PANEL_URL_PATH,
     URL_BASE,
 )
 
@@ -200,3 +217,63 @@ class JSModuleRegistration:
     def _get_path(url: str) -> str:
         """Path without the query parameters."""
         return url.split("?")[0]
+
+
+async def async_register_panel(hass: HomeAssistant) -> None:
+    """Serve the admin JS and (re-)register the panel.
+
+    Admin-only: the page writes the integration's configuration — the vehicles,
+    their tyre sets, and the manoeuvres done to them.
+    """
+    # The file only, never the folder that holds it: a static path is served
+    # outside Home Assistant's authentication, and this package must not travel
+    # with the module it serves.
+    try:
+        await hass.http.async_register_static_paths(
+            [
+                StaticPathConfig(
+                    f"{URL_BASE}/{ADMIN_JS}",
+                    str(Path(__file__).parent / ADMIN_JS),
+                    True,
+                )
+            ]
+        )
+        _LOGGER.debug("Panel path registered: %s/%s", URL_BASE, ADMIN_JS)
+    except (RuntimeError, ValueError):
+        _LOGGER.debug("Panel path already registered: %s/%s", URL_BASE, ADMIN_JS)
+
+    # `?v=` comes from the manifest, as Home Assistant already parsed it: it is
+    # what makes an upgrade visible to a browser holding the old module.
+    try:
+        integration = await async_get_integration(hass, DOMAIN)
+        version = str(integration.version or FALLBACK_VERSION)
+    except Exception:  # noqa: BLE001 - a missing integration is not our problem
+        version = FALLBACK_VERSION
+
+    frontend.async_register_built_in_panel(
+        hass,
+        component_name="custom",
+        frontend_url_path=PANEL_URL_PATH,
+        sidebar_title=PANEL_SIDEBAR_TITLE,
+        sidebar_icon=PANEL_SIDEBAR_ICON,
+        require_admin=True,
+        config={
+            "_panel_custom": {
+                "name": PANEL_NAME,
+                "module_url": f"{URL_BASE}/{ADMIN_JS}?v={version}",
+                "embed_iframe": False,
+                "trust_external": False,
+            }
+        },
+        update=True,  # idempotent across entry reloads
+    )
+    _LOGGER.debug("Panel registered at /%s (v%s)", PANEL_URL_PATH, version)
+
+
+@callback
+def async_unregister_panel(hass: HomeAssistant) -> None:
+    """Remove the panel when the last vehicle is deleted."""
+    try:
+        frontend.async_remove_panel(hass, PANEL_URL_PATH)
+    except Exception:  # noqa: BLE001 — a panel already gone is fine
+        pass

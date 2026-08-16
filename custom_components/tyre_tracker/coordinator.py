@@ -38,6 +38,8 @@ from .const import (
     CONF_SET_ID,
     CONF_SETS,
     CONF_TPMS,
+    CONF_VEHICLE_ID,
+    CONF_VEHICLES,
     CORNER_OF,
     CORNERS,
     DATA_HISTORY,
@@ -156,6 +158,11 @@ class TyreSet:
     # One pressure sensor per tyre, held by the slot it occupies: the four
     # corners for a set of four, left and right for a pair.
     tpms: dict[str, str] = field(default_factory=dict)
+    # What to call a set that carries neither reference nor label. Handed down
+    # in the vehicle's language rather than looked up here: a dataclass has no
+    # vocabulary, and the alternative — falling back to `set_id` — printed
+    # thirty-two hexadecimal characters where a name was expected.
+    fallback: str = ""
     total: float = 0.0
     mounted_at: float | None = None
     mounted_since: str | None = None
@@ -215,8 +222,14 @@ class TyreSet:
 
     @property
     def title(self) -> str:
-        """What to call it on screen."""
-        return self.label or self.reference or self.set_id
+        """What to call it on screen.
+
+        The id is the last resort and not the first: it is a uuid, and a device
+        named `8995e62fa2f3402482b77c2c4f49f601` is a device nobody recognises.
+        A record without a reference can only come from a store written before
+        the panel refused one.
+        """
+        return self.label or self.reference or self.fallback or self.set_id
 
     @property
     def icon(self) -> str:
@@ -268,14 +281,26 @@ class TyreCoordinator:
         words: Words,
         rotation_interval: float = 0,
         initial_odometer: float | None = None,
+        config_entry_id: str | None = None,
     ) -> None:
         """Set up the coordinator for one vehicle.
+
+        `entry_id` is the VEHICLE's id — the key its store, its devices and
+        its events hang from. It was the config entry's id when each vehicle
+        was an entry of its own, and it keeps the name so nothing downstream
+        has to care. `config_entry_id` names the one real entry, whose options
+        hold every vehicle's records: it is only reached for writing a set's
+        sensor mapping back (`_persist_tpms`).
 
         `sets` is one dict per configured set: id, label, reference, season,
         axle, size, dot, price, storage, tpms.
         """
         self.hass = hass
         self.entry_id = entry_id
+        self._config_entry_id = config_entry_id
+        # Raised by `discard` when the vehicle is deleted: the store file is
+        # gone, and nothing here may write it back.
+        self._discarded = False
         self.vehicle = vehicle
         # The words this vehicle speaks. Held here rather than looked up where
         # they are needed: the entities, the flow and the sensor state all
@@ -286,7 +311,9 @@ class TyreCoordinator:
         self._initial_odometer = initial_odometer
         self._configured = list(sets)
         self._store: Store = Store(hass, STORAGE_VERSION, f"{STORAGE_KEY}.{entry_id}")
-        self._listeners: list[Callable[[], None]] = []
+        # Each subscriber with what it shows: a set id, or None for an entity
+        # of the vehicle. See `add_listener`.
+        self._listeners: list[tuple[Callable[[], None], str | None]] = []
         self._unsub_odometer: Callable[[], None] | None = None
         self._unsub_tpms: Callable[[], None] | None = None
         # Counters of sets no longer configured, kept verbatim so that
@@ -315,11 +342,13 @@ class TyreCoordinator:
         # configuration keeps its counters in the store untouched, so putting
         # it back later restores the mileage instead of starting over.
         sets: dict[str, TyreSet] = {}
+        nameless = self.words.get("set.fallback", "Set")
         for item in self._configured:
             set_id = item["id"]
             saved = counters.get(set_id, {})
             sets[set_id] = TyreSet(
                 set_id=set_id,
+                fallback=nameless,
                 label=item.get("label") or "",
                 reference=item.get("reference") or "",
                 season=item.get("season") or SEASON_SUMMER,
@@ -493,6 +522,16 @@ class TyreCoordinator:
             DATA_HISTORY: [dict(entry) for entry in self.data.history],
         }
 
+    @callback
+    def discard(self) -> None:
+        """Forget the store: this vehicle is being deleted.
+
+        Its file has just been removed, and the unload that follows the
+        options write must not put it back — the final save on unload exists
+        for vehicles that go on existing.
+        """
+        self._discarded = True
+
     async def _async_save(self) -> None:
         """Persist the current state, now.
 
@@ -500,6 +539,8 @@ class TyreCoordinator:
         a starting point. Losing one of those loses kilometres nothing else
         records.
         """
+        if self._discarded:
+            return
         await self._store.async_save(self._payload())
 
     @callback
@@ -512,6 +553,8 @@ class TyreCoordinator:
         back on its own. `Store` writes what is pending when Home Assistant
         stops, so a clean shutdown loses nothing at all.
         """
+        if self._discarded:
+            return
         self._store.async_delay_save(self._payload, SAVE_DELAY)
 
     # ----- reading -----
@@ -1402,19 +1445,34 @@ class TyreCoordinator:
 
     @callback
     def _persist_tpms(self, tyre: TyreSet) -> None:
-        """Write a set's sensor mapping back into the entry options."""
-        entry = self.hass.config_entries.async_get_entry(self.entry_id)
+        """Write a set's sensor mapping back into this vehicle's record.
+
+        The record lives in the one entry's options, under the vehicle this
+        coordinator speaks for. Only that vehicle's list is rewritten; the
+        others travel untouched.
+        """
+        entry = self.hass.config_entries.async_get_entry(
+            self._config_entry_id or self.entry_id
+        )
         if entry is None:
             return
         self.hass.config_entries.async_update_entry(
             entry,
             options={
                 **entry.options,
-                CONF_SETS: [
-                    {**record, CONF_TPMS: dict(tyre.tpms)}
-                    if record.get(CONF_SET_ID) == tyre.set_id
-                    else record
-                    for record in entry.options.get(CONF_SETS, [])
+                CONF_VEHICLES: [
+                    {
+                        **vehicle,
+                        CONF_SETS: [
+                            {**record, CONF_TPMS: dict(tyre.tpms)}
+                            if record.get(CONF_SET_ID) == tyre.set_id
+                            else record
+                            for record in vehicle.get(CONF_SETS, [])
+                        ],
+                    }
+                    if vehicle.get(CONF_VEHICLE_ID) == self.entry_id
+                    else vehicle
+                    for vehicle in entry.options.get(CONF_VEHICLES, [])
                 ],
             },
         )
@@ -1423,8 +1481,30 @@ class TyreCoordinator:
 
     @callback
     def _tpms_changed(self, event) -> None:
-        """A pressure moved: nothing to store, but the card is now stale."""
-        self._notify()
+        """A pressure moved: nothing to store, but the card is now stale.
+
+        Only what reads that sensor is told, plus everything hanging from the
+        vehicle itself — its own sensor carries every set's readings and is
+        therefore always concerned. A wheel that publishes every few seconds
+        used to rewrite the state of every entity of the car, mileage counters
+        included, which had not moved a metre.
+        """
+        self._notify(self._sets_reading(event.data.get("entity_id")))
+
+    @callback
+    def _sets_reading(self, entity_id: str | None) -> set[str]:
+        """The sets that read from that entity, directly or as a companion."""
+        if not entity_id:
+            return set()
+        touched: set[str] = set()
+        for tyre in self.data.sets.values():
+            for chosen in tyre.tpms.values():
+                if not chosen:
+                    continue
+                if chosen == entity_id or entity_id in self._companions(chosen).values():
+                    touched.add(tyre.set_id)
+                    break
+        return touched
 
     @callback
     def _watched_pressures(self) -> set[str]:
@@ -1656,18 +1736,35 @@ class TyreCoordinator:
     # ----- subscriptions -----
 
     @callback
-    def add_listener(self, listener: Callable[[], None]) -> Callable[[], None]:
-        """Subscribe to state changes. Returns the unsubscribe callback."""
-        self._listeners.append(listener)
+    def add_listener(
+        self, listener: Callable[[], None], set_id: str | None = None
+    ) -> Callable[[], None]:
+        """Subscribe to state changes. Returns the unsubscribe callback.
+
+        `set_id` says what the subscriber shows. An entity of one tyre set
+        names it and is left alone when another set moves; an entity of the
+        vehicle passes None and hears everything, because what it shows is the
+        car — which every set is part of.
+        """
+        entry = (listener, set_id)
+        self._listeners.append(entry)
 
         def remove() -> None:
-            if listener in self._listeners:
-                self._listeners.remove(listener)
+            if entry in self._listeners:
+                self._listeners.remove(entry)
 
         return remove
 
     @callback
-    def _notify(self) -> None:
-        """Tell every entity to write its state."""
-        for listener in list(self._listeners):
-            listener()
+    def _notify(self, set_ids: set[str] | None = None) -> None:
+        """Tell the entities concerned to write their state.
+
+        None means everything — which is the honest answer for a manoeuvre: a
+        fitting settles one set, stamps another and moves the car's own state,
+        and working out the exact list would cost more than the writes it saves.
+        A named set of ids is for what is genuinely local, a pressure reading
+        being the only such thing and also the most frequent by far.
+        """
+        for listener, scope in list(self._listeners):
+            if set_ids is None or scope is None or scope in set_ids:
+                listener()
