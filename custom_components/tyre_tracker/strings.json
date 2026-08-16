@@ -165,5 +165,13 @@
     "odometer_backwards": {
       "message": "An odometer does not go backwards: {value} km is below the {tracked} km already recorded. Change the odometer source if the counter really did change."
     }
+  },
+  "selector": {
+    "position": {
+      "options": {
+        "front": "Front",
+        "rear": "Rear"
+      }
+    }
   }
 }

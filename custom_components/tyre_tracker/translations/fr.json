@@ -165,5 +165,13 @@
     "odometer_backwards": {
       "message": "Un compteur ne recule pas : {value} km est en deçà des {tracked} km déjà relevés. Changez de source si le compteur a réellement changé."
     }
+  },
+  "selector": {
+    "position": {
+      "options": {
+        "front": "Avant",
+        "rear": "Arrière"
+      }
+    }
   }
 }
